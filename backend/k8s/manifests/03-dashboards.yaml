@@ -30,7 +30,7 @@ metadata:
   labels:
     grafana_dashboard: "1"
 data:
-  fastapi-logs.json: |-
+  dashboard.json: |-
     {
       "title": "k3d Stats",
       "uid": "9mfU3p-vk",

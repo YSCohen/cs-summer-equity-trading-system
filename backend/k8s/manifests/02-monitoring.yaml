@@ -20,12 +20,24 @@ spec:
   # We turn ON Grafana and Promtail, and tell Promtail to read everything.
   set:
     grafana.enabled: "true"
-    promtail.enabled: "true"
     loki.persistence.enabled: "false"
+    promtail.enabled: "true"
+    prometheus.enabled: "true"
+    grafana.grafana\.ini.dashboards.default_home_dashboard_path: "/tmp/dashboards/dashboard.json"
     grafana.sidecar.dashboards.enabled: "true"
     grafana.sidecar.dashboards.label: "grafana_dashboard"
-    prometheus.enabled: "true"
-    grafana.grafana\.ini.dashboards.default_home_dashboard_path: "/tmp/dashboards/fastapi-developer-dashboard/dashboard.json"
+    grafana.sidecar.dashboards.searchNamespace: "ALL"
+    grafana.sidecar.dashboards.folder: "/tmp/dashboards"
+    grafana.sidecar.dashboards.provider.allowUiUpdates: "true"
+    grafana.sidecar.dashboards.additionalProviders: |
+      - name: loki-official
+        orgId: 1
+        folder: 'Loki'
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /tmp/dashboards
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
