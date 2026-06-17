@@ -16,7 +16,10 @@ options:
   kubeconfig:
     updateDefaultKubeconfig: true
     switchCurrentContext: true
-
+volumes:
+  - volume: ${HOST_ROOT}/logs:/var/log/external_host
+    nodeFilters:
+      - agent:0
 files:
   - description: "1. Create Namespaces"
     source: ./manifests/00-namespaces.yaml

@@ -1,10 +1,4 @@
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: monitoring
----
-# This tells K3s to automatically download and install the Loki-Stack Helm Chart
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
 metadata:
@@ -14,30 +8,58 @@ spec:
   targetNamespace: monitoring
   repo: https://grafana.github.io/helm-charts
   chart: loki-stack
-  # We use a specific version for stability
   version: 2.9.11
-  # These are the Helm "values" we override.
-  # We turn ON Grafana and Promtail, and tell Promtail to read everything.
-  set:
-    grafana.enabled: "true"
-    loki.persistence.enabled: "false"
-    promtail.enabled: "true"
-    prometheus.enabled: "true"
-    grafana.grafana\.ini.dashboards.default_home_dashboard_path: "/tmp/dashboards/dashboard.json"
-    grafana.sidecar.dashboards.enabled: "true"
-    grafana.sidecar.dashboards.label: "grafana_dashboard"
-    grafana.sidecar.dashboards.searchNamespace: "ALL"
-    grafana.sidecar.dashboards.folder: "/tmp/dashboards"
-    grafana.sidecar.dashboards.provider.allowUiUpdates: "true"
-    grafana.sidecar.dashboards.additionalProviders: |
-      - name: loki-official
-        orgId: 1
-        folder: 'Loki'
-        type: file
-        disableDeletion: false
-        editable: true
-        options:
-          path: /tmp/dashboards
+  valuesContent: |-
+    grafana:
+      enabled: true
+      grafana.ini:
+        dashboards:
+          default_home_dashboard_path: /tmp/dashboards/dashboard.json
+      sidecar:
+        dashboards:
+          enabled: true
+          label: grafana_dashboard
+          searchNamespace: ALL
+          folder: /tmp/dashboards
+          provider:
+            allowUiUpdates: true
+          additionalProviders:
+            - name: loki-official
+              orgId: 1
+              folder: 'Loki'
+              type: file
+              disableDeletion: false
+              editable: true
+              options:
+                path: /tmp/dashboards
+    loki:
+      persistence:
+        enabled: false
+    prometheus:
+      enabled: true
+    promtail:
+      enabled: true
+      extraVolumes:
+        - name: external-logs
+          hostPath:
+            path: /var/log/external_host
+      extraVolumeMounts:
+        - name: external-logs
+          mountPath: /var/log/external_host
+          readOnly: true
+      config:
+        clients:
+          - url: http://loki-stack.monitoring.svc.cluster.local:3100/loki/api/v1/push
+        snippets:
+          extraScrapeConfigs: |
+            - job_name: external_host_logs
+              static_configs:
+                - targets:
+                    - localhost
+                  labels:
+                    job: host_logs
+                    app: booklib
+                    __path__: /var/log/external_host/*.log
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress

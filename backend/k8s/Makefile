@@ -8,15 +8,22 @@ toolbox-up:
 toolbox-down:
 	docker compose down
 
-# Uses the toolbox to create the K3s cluster. (Uses absolute paths inside the container)
-cluster-up: toolbox-up
-	@echo "Spinning up the cluster and auto-deploying manifests..."
-	docker exec k8s-toolbox k3d cluster create --config backend/k8s/k3d-config.yaml
-	@echo "Cluster is ready and resources are deploying!"
+HOST_ROOT := $(shell cd ../.. && pwd)
 
-# Uses the toolbox to delete the cluster
+cluster-up:
+	@echo "Ensuring the k8s-toolbox container is running..."
+	@docker compose up -d
+	@echo "Ensuring logs directory exists at project root..."
+	@mkdir -p $(HOST_ROOT)/logs
+	@echo "Spinning up the cluster and auto-deploying manifests..."
+	@docker exec -e HOST_ROOT="$(HOST_ROOT)" -i k8s-toolbox k3d cluster create --config backend/k8s/k3d-config.yaml
+
 cluster-down:
-	docker exec k8s-toolbox k3d cluster delete dev-cluster
+	@echo "Deleting the K3d cluster..."
+	@# The '-' at the start of this line tells Make to ignore errors if the toolbox is already gone
+	-docker exec k8s-toolbox k3d cluster delete dev-cluster
+	@echo "Shutting down the toolbox..."
+	@docker compose down
 
 # Destroys everything and rebuilds from scratch
 rebuild: cluster-down toolbox-down
