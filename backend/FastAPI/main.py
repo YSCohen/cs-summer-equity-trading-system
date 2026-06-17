@@ -147,34 +147,38 @@ def create_account(can_short: bool, username: str = Depends(verify_cookie)):
         "Updated_at": now,
     }
 
-    redis_client.hset(redis_dictionaries[1], account_UUID, account_data)
+    redis_client.hset(redis_dictionaries[1], account_UUID, json.dumps(account_data))
 
     raw_user = redis_client.hget(redis_dictionaries[0], username)
     user_data = json.loads(raw_user)
 
     user_data["accounts"].append(account_UUID)
-    user_data["Update_at"] = now
+    user_data["updated_at"] = now
 
     redis_client.hset(redis_dictionaries[0], username, json.dumps(user_data))
 
     return {"message": "Account created"}
 
+
 @app.post("/users/accounts/{account_id}")
-def add_account(account_id: uuid, username: str = Depends(verify_cookie)):
+def add_account(account_id: str, username: str = Depends(verify_cookie)):
 
     raw_user = redis_client.hget(redis_dictionaries[0], username)
     user_data = json.loads(raw_user)
 
     user_data["accounts"].append(account_id)
-    user_data["Update_at"] = datetime.now(timezone.utc).isoformat()
+    user_data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     redis_client.hset(redis_dictionaries[0], username, json.dumps(user_data))
 
-    return {"message": "Account added to user {username}"}
+    return {"message": f"Account added to user {username}"}
+
+
 # endregion
 
-#Positions
-#region
+
+# Positions
+# region
 @app.get("/positions")
 def get_users_positions(username: str = Depends(verify_cookie)):
 
@@ -189,22 +193,38 @@ def get_users_positions(username: str = Depends(verify_cookie)):
         x_positions = json.loads(x)
         if x_positions["Account_id"] in user_data["accounts"]:
             if x_positions["Account_id"] not in positions:
-                positions[x_positions["Account_id"]] = [x_positions[1:]]
+                positions[x_positions["Account_id"]] = [
+                    {
+                        "Ticker": x_positions["Ticker"],
+                        "Quantity": x_positions["Quantity"],
+                        "Created_at": x_positions["Created_at"],
+                        "Update_at": x_positions["Updated_at"],
+                    }
+                ]
             else:
-                positions[x_positions["Account_id"]].append(x_positions[1:])
-    
-    return {"message": "{positions}"}
+                positions[x_positions["Account_id"]].append(
+                    {
+                        "Ticker": x_positions["Ticker"],
+                        "Quantity": x_positions["Quantity"],
+                        "Created_at": x_positions["Created_at"],
+                        "Update_at": x_positions["Updated_at"],
+                    }
+                )
+
+    return {"message": positions}
 
 
-@app.get("/positions/{account_id}")
-def get_accounts_positions(account_id = uuid, username: str = Depends(verify_cookie)):
+@app.get("/positions/accounts/{account_id}")
+def get_accounts_positions(account_id: str, username: str = Depends(verify_cookie)):
 
     raw_user = redis_client.hget(redis_dictionaries[0], username)
     user_data = json.loads(raw_user)
 
     if account_id not in user_data["accounts"]:
-         raise HTTPException(status_code=401, detail="You do not have access to this account")
-    
+        raise HTTPException(
+            status_code=401, detail="You do not have access to this account"
+        )
+
     positions = {}
 
     raw_positions = redis_client.hgetall(redis_dictionaries[3])
@@ -212,11 +232,16 @@ def get_accounts_positions(account_id = uuid, username: str = Depends(verify_coo
     for x in raw_positions.values():
         x_positions = json.loads(x)
         if x_positions["Account_id"] == account_id:
-            positions[x_positions["Ticker"]] = x_positions[3:]
-    
-    return {"message": "{positions}"}
+            positions[x_positions["Ticker"]] = {
+                "Quantity": x_positions["Quantity"],
+                "Created_at": x_positions["Created_at"],
+                "Update_at": x_positions["Updated_at"],
+            }
 
-@app.get("/positions/{ticker}")
+    return {"message": positions}
+
+
+@app.get("/positions/ticker/{ticker}")
 def get_users_positions_for_ticker(ticker: str, username: str = Depends(verify_cookie)):
 
     raw_user = redis_client.hget(redis_dictionaries[0], username)
@@ -228,32 +253,55 @@ def get_users_positions_for_ticker(ticker: str, username: str = Depends(verify_c
 
     for x in raw_positions.values():
         x_positions = json.loads(x)
-        if x_positions["Account_id"] in user_data["accounts"] and x_positions["Ticker"] == ticker:
+        if (
+            x_positions["Account_id"] in user_data["accounts"]
+            and x_positions["Ticker"] == ticker
+        ):
             if x_positions["Account_id"] not in positions:
-                positions[x_positions["Account_id"]] = [x_positions[1:]]
+                positions[x_positions["Account_id"]] = [
+                    {
+                        "Ticker": x_positions["Ticker"],
+                        "Quantity": x_positions["Quantity"],
+                        "Created_at": x_positions["Created_at"],
+                        "Update_at": x_positions["Updated_at"],
+                    }
+                ]
             else:
-                positions[x_positions["Account_id"]].append(x_positions[1:])
-    
-    return {"message": "{positions}"}
+                positions[x_positions["Account_id"]].append(
+                    {
+                        "Ticker": x_positions["Ticker"],
+                        "Quantity": x_positions["Quantity"],
+                        "Created_at": x_positions["Created_at"],
+                        "Update_at": x_positions["Updated_at"],
+                    }
+                )
+
+    return {"message": positions}
 
 
-@app.get("/positions/{account_id}/{ticker}")
-def get_accounts_positions_for_ticker(ticker: str, account_id = uuid, username: str = Depends(verify_cookie)):
+@app.get("/positions/accounts/{account_id}/ticker/{ticker}")
+def get_accounts_positions_for_ticker(
+    ticker: str, account_id: str, username: str = Depends(verify_cookie)
+):
 
     raw_user = redis_client.hget(redis_dictionaries[0], username)
     user_data = json.loads(raw_user)
 
     if account_id not in user_data["accounts"]:
-         raise HTTPException(status_code=401, detail="You do not have access to this account")
-    
+        raise HTTPException(
+            status_code=401, detail="You do not have access to this account"
+        )
+
     positions = {}
 
     raw_positions = redis_client.hgetall(redis_dictionaries[3])
 
     for x in raw_positions.values():
         x_positions = json.loads(x)
-        if x_positions["Account_id"] == account_id and x_positions["ticker"] == ticker:
+        if x_positions["Account_id"] == account_id and x_positions["Ticker"] == ticker:
             positions[x_positions["Ticker"]] = x_positions["Quantity"]
-    
-    return {"message": "{positions}"}
-#endregion
+
+    return {"message": positions}
+
+
+# endregion
