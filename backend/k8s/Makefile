@@ -69,9 +69,10 @@ watch:
 
 # Updates the dashboard instantly without rebuilding the cluster
 dash:
-	@echo "Hot-reloading Grafana Dashboard..."
-	@docker exec -i k8s-toolbox kubectl delete configmap fastapi-developer-dashboard -n monitoring --ignore-not-found
-	@docker exec -i k8s-toolbox kubectl create configmap fastapi-developer-dashboard \
+	@echo "Updating Dashboard..."
+	@cat manifests/dashboard.json | docker exec -i k8s-toolbox kubectl delete configmap fastapi-developer-dashboard -n monitoring --ignore-not-found
+	@cat manifests/dashboard.json | docker exec -i k8s-toolbox kubectl create configmap fastapi-developer-dashboard \
 		--namespace monitoring \
-		--from-file=fastapi-logs.json=backend/k8s/manifests/dashboard.json
-	@echo "Dashboard applied! (Grafana may take ~10 seconds to detect the change)"
+		--from-file=fastapi-logs.json=/dev/stdin \
+		--dry-run=client -o yaml | docker exec -i k8s-toolbox kubectl apply -f -
+	@docker exec -i k8s-toolbox kubectl label cm fastapi-developer-dashboard grafana_dashboard=1 -n monitoring --overwrite
