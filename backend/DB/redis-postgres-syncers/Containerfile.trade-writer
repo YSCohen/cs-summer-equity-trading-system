@@ -4,7 +4,7 @@ WORKDIR /app
 
 # build deps in separate layer
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main(unimplemented!()) {}" > src/trade-writer.rs
+RUN mkdir src && echo "fn main() {unimplemented!()}" > src/trade-writer.rs
 RUN cargo build --release
 RUN rm -f target/release/deps/trade_writer* target/release/trade-writer*
 
