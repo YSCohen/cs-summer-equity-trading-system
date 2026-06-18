@@ -325,8 +325,9 @@ def get_accounts_positions_for_ticker(
 
 # endregion
 
-#Trades
-#region
+
+# Trades
+# region
 @app.post("/trade")
 async def create_trade(trade: dict, username: str = Depends(verify_cookie)):
 
@@ -336,78 +337,119 @@ async def create_trade(trade: dict, username: str = Depends(verify_cookie)):
         raise HTTPException(status_code=404, detail="This ticker does not exist")
 
     raw_user = await async_redis_client.hget(redis_dictionaries[0], username)
+    if not raw_user:
+        raise HTTPException(status_code=404, detail="This user does not exist")
     user_data = json.loads(raw_user)
+    
+    raw_account = await async_redis_client.hget(
+        redis_dictionaries[1], trade["account_id"]
+    )
+    if not raw_account:
+        raise HTTPException(status_code=404, detail="This account does not exist")
+    account_data = json.loads(raw_account)
 
     # Confirm you have access to this account
     if trade["account_id"] not in user_data["accounts"]:
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
+    
     elif trade["user_id"] != username:
-        raise HTTPException(status_code=404, detail="This user does not match your username")
+        raise HTTPException(
+            status_code=401, detail="This user does not match your username"
+        )
+    
     elif trade["direction"] not in ("Buy", "Sell"):
         raise HTTPException(status_code=422, detail="Not a valid Direction")
-    
-    
-    raw_account = await async_redis_client.hget(redis_dictionaries[1], trade["account_id"])
-    account_data = json.loads(raw_account)
 
     raw_positions = await async_redis_client.hgetall(redis_dictionaries[3])
     position_key = None
     new_position = None
 
-    for key, x in raw_positions.items():
-        x_positions = json.loads(x)
+    positions = {
+        key.decode() if isinstance(key, bytes) else key: json.loads(value)
+        for key, value in raw_positions.items()
+    }
+
+    for key, x in positions.items():
         if (
-            x_positions["Account_id"] == trade["account_id"] and x_positions["Ticker"] == trade["ticker"]
+            x["Account_id"] == trade["account_id"]
+            and x["Ticker"] == trade["ticker"]
         ):  # Correct account and ticker
-            position_key = key.decode() if isinstance(key, bytes) else key
-            if x_positions["Quantity"]-trade["quantity"] < 0 and not account_data["can_short"]:
-                raise HTTPException(status_code=403, detail="You do not have permission to short")
-            new_position = x_positions["Quantity"]+trade["quantity"] if trade["direction"] == "Buy" else x_positions["Quantity"]-trade["quantity"]
-            
+            position_key = key
+            if (
+                trade["direction"] == "Sell"
+                and x["Quantity"] - trade["quantity"] < 0
+                and not account_data["can_short"]
+            ):
+                raise HTTPException(
+                    status_code=403, detail="You do not have permission to short"
+                )
+            new_position = (
+                x["Quantity"] + trade["quantity"]
+                if trade["direction"] == "Buy"
+                else x["Quantity"] - trade["quantity"]
+            )
+
             break  # only one account and one ticker
 
+    if new_position is None:
+        if trade["direction"] != "Buy" and not account_data["can_short"]:
+            raise HTTPException(
+                status_code=403, detail="You do not have permission to short"
+            )
+        
     payload = {
         "trade_id": str(uuid.uuid4()),
         "account_id": trade["account_id"],
         "user_id": trade["user_id"],
         "direction": trade["direction"],  # Must be exact string: 'Buy' or 'Sell'
         "ticker": trade["ticker"],
-        "created_at": int(time.time()),   # Unix timestamps for lightning-fast serializing
+        "created_at": int(
+            time.time()
+        ),  # Unix timestamps for lightning-fast serializing
         "updated_at": int(time.time()),
         "quantity": int(trade["quantity"]),
-        "price": str(trade["price"]),     # Kept as string for Postgres NUMERIC ingestion
-        "other_account": trade.get("other_account") # Can be None/Null
+        "price": str(trade["price"]),  # Kept as string for Postgres NUMERIC ingestion
+        "other_account": trade.get("other_account"),  # Can be None/Null
     }
-    
+
     # Pack to raw binary
     packed_bytes = msgpack.packb(payload)
-    
-    # High Efficiency: Save to a single field named "d"
-    await async_redis_client.xadd("trade_stream", {"d": packed_bytes})
-    
+
     now = datetime.now(timezone.utc).isoformat()
 
     if position_key is None:
-        position_key = len(raw_positions.keys())
+        new_position = (
+            trade["quantity"] if trade["direction"] == "Buy" else 0 - trade["quantity"]
+        )
+        position_key = str(uuid.uuid4())
         position_data = {
             "Account_id": trade["account_id"],
             "Ticker": trade["ticker"],
             "Quantity": new_position,
             "Created_at": now,
-            "Updated_at": now
+            "Updated_at": now,
         }
-        await async_redis_client.hset(redis_dictionaries[3], position_key, json.dumps(position_data))
+        await async_redis_client.hset(
+            redis_dictionaries[3], position_key, json.dumps(position_data)
+        )
     else:
-        raw_specific_position = await async_redis_client.hget(redis_dictionaries[3], position_key)
+        raw_specific_position = await async_redis_client.hget(
+            redis_dictionaries[3], position_key
+        )
         specific_position = json.loads(raw_specific_position)
 
         specific_position["Quantity"] = new_position
         specific_position["Updated_at"] = now
-        await async_redis_client.hset(redis_dictionaries[3], position_key, json.dumps(specific_position))
-    
+        await async_redis_client.hset(
+            redis_dictionaries[3], position_key, json.dumps(specific_position)
+        )
+
+    # High Efficiency: Save to a single field named "d"
+    await async_redis_client.xadd("trade_stream", {"d": packed_bytes})
 
     return {"status": "success"}
 
-#endregion
+
+# endregion
