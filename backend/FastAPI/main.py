@@ -39,7 +39,7 @@ algorithm = "HS256"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def create_cookie(username: str, user_id: str):
+def create_cookie(username: str):
 
     payload = {
         "username": username,
