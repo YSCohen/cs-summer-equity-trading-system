@@ -7,6 +7,7 @@ use redis::streams::{StreamReadOptions, StreamReadReply};
 use serde::Deserialize;
 use std::env;
 use std::error::Error;
+use std::{thread::sleep, time};
 use tokio_postgres::NoTls;
 
 #[derive(Deserialize)]
@@ -42,6 +43,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let worker_name =
         env::var("WORKER_NAME").expect("WORKER_NAME environment variable must be set");
 
+    println!("CHECKPOINT: env vars");
+
+    let dur = time::Duration::from_millis(500);
+    sleep(dur);
+
     // connect to postgres
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
     tokio::spawn(async move {
@@ -50,9 +56,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
+    println!("CHECKPOINT: postgres");
+
     // connect to redis
     let redis_client = redis::Client::open(redis_url)?;
     let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
+
+    println!("CHECKPOINT: redis");
 
     // Create Redis Consumer Group dynamically
     let _: Result<(), _> = redis_conn
