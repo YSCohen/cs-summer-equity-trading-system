@@ -1,39 +1,54 @@
-import os
 import random
 import time
+import logging
 from pathlib import Path
-
-import logbook
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # 1. Define the base log directory
 LOG_DIR = Path("../../logs")
 APPS = ["FastAPI", "Postgres", "Redis", "Streamlit"]
 
+# 2. Custom Formatter to strictly enforce New York time
+class NYTimeFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        # Convert the log record's internal timestamp strictly to America/New_York
+        dt = datetime.fromtimestamp(record.created, tz=ZoneInfo("America/New_York"))
+        if datefmt:
+            return dt.strftime(datefmt)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+
 # A dictionary to hold our different loggers
 loggers = {}
 
-# 2. Setup folders and handlers for each app dynamically
+# 3. Setup folders and standard handlers for each app dynamically
 for app_name in APPS:
-    # Create the specific subfolder (e.g., ../../logs/FastAPI)
+    # Create the specific subfolder
     app_dir = LOG_DIR / app_name
     app_dir.mkdir(parents=True, exist_ok=True)
-    
     log_file = app_dir / "app.log"
     
-    # Create a handler specifically for this app
-    # The `filter` lambda ensures this file ONLY gets logs from its matching channel
-    handler = logbook.FileHandler(
-        log_file, 
-        level='INFO', 
-        format_string='[{record.time:%Y-%m-%d %H:%M:%S}] {record.level_name}: {record.channel}: {record.message}',
-        filter=lambda record, _handler, target=app_name: record.channel == target
-    )
+    # Get standard Python logger for this specific app
+    logger = logging.getLogger(app_name)
+    logger.setLevel(logging.INFO)
     
-    # Push this handler to the global stack
-    handler.push_application()
+    # Prevent logs from bubbling up to the root console logger
+    logger.propagate = False 
     
-    # Create the logger and store it in our dictionary
-    loggers[app_name] = logbook.Logger(app_name)
+    # Clear any existing handlers (useful if running in interactive environments)
+    if logger.hasHandlers():
+        logger.handlers.clear()
+        
+    # Set up the file handler
+    handler = logging.FileHandler(log_file)
+    
+    # Apply the exact format Loki expects using our New York Formatter
+    # This outputs: [2026-06-17 14:30:00] INFO: FastAPI: Message...
+    formatter = NYTimeFormatter('[{asctime}] {levelname}: {name}: {message}', style='{')
+    handler.setFormatter(formatter)
+    
+    logger.addHandler(handler)
+    loggers[app_name] = logger
 
 def test_log():
     print(f"Starting log simulation in {LOG_DIR.resolve()}...")
@@ -48,7 +63,7 @@ def test_log():
     ]
 
     # Generate 20 random logs
-    for i in range(20):
+    for _ in range(20):
         # "Flip a coin" to pick a random app and a random log level
         target_app = random.choice(APPS)
         target_level = random.choice(['info', 'warning', 'error'])
@@ -69,4 +84,4 @@ def test_log():
 
 if __name__ == "__main__":
     test_log()
-    print("\n✅ Finished generating random logs!")
+    print("\n✅ Finished generating random logs in NY Timezone!")

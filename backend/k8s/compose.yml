@@ -1,11 +1,19 @@
 ---
 services:
-  toolbox:
+  k8s-toolbox:
     build:
       context: .
       dockerfile: Dockerfile.toolbox
     container_name: k8s-toolbox
-    network_mode: host
+    tty: true
+    stdin_open: true
+    privileged: true
+    user: root
+    networks:
+      - k3d-network
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ../../:/workspace
+      - ${DOCKER_HOST_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+      - ../../:/workspace:z
+networks:
+  k3d-network:
+    name: k3d-network

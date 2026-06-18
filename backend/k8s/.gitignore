@@ -16,3 +16,5 @@ kubeconfig
 
 # Null-ls nonsense 
 .null-ls*
+
+.env
