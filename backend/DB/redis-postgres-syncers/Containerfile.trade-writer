@@ -1,0 +1,18 @@
+# --- Stage 1: Build the binary ---
+FROM rust:slim AS builder
+WORKDIR /app
+
+COPY ./Cargo.toml ./Cargo.toml
+COPY ./Cargo.lock ./Cargo.lock
+COPY ./src ./src
+RUN cargo build --release
+
+# --- Stage 2: The Ultra-Lightweight Runtime Container ---
+FROM debian:bookworm-slim
+WORKDIR /app
+
+# Copy only the compiled native binary from the builder stage
+COPY --from=builder /app/target/release/trade-writer /app/trade-writer
+
+# Run the compiled binary
+CMD ["./trade-writer"]
