@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Response, HTTPException, Cookie, Depends
-from redis.asyncio import Redis
+from redis import Redis as SyncRedis
+from redis.asyncio import Redis as AsyncRedis
 import jwt
 import uuid
 import json
@@ -7,6 +8,7 @@ import time
 import msgpack
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
+from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -33,23 +35,35 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def create_cookie(username: str):
 
     payload = {
-        "name": username,
+        "username": username,
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(seconds=day_in_sec),
     }
-    authentication_cookie = jwt.encode(payload, secret_key, algorithm=algorithm)
-    return authentication_cookie
+    session_token = jwt.encode(payload, secret_key, algorithm=algorithm)
+    return session_token
 
 
 # Initialize Redis client
-redis_client = Redis(host=redis_host, port=redis_port_number, db=0)
-async_redis_client = Redis(host=redis_host, port=redis_port_number, db=0)
+redis_client = SyncRedis(host=redis_host, port=redis_port_number, db=0)
+async_redis_client = AsyncRedis(host=redis_host, port=redis_port_number, db=0)
 
 
 # Login details
 # region
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 @app.post("/register")
-def register_user(username: str, password: str, response: Response):
+def register_user(request: RegisterRequest, response: Response):
+
+    username = request.username
+    password = request.password
 
     # Check if the username already exists in Redis
     if redis_client.hexists(redis_dictionaries[0], username):
@@ -57,12 +71,12 @@ def register_user(username: str, password: str, response: Response):
 
     # Create new User data
     user_id = str(uuid.uuid4())
-    uuid_account_array = []
+    account_ids = []
     now = datetime.now(timezone.utc).isoformat()
     user_data = {
         "user_id": user_id,
         "password_hash": pwd_context.hash(password),
-        "accounts": uuid_account_array,
+        "accounts": account_ids,
         "created_at": now,
         "updated_at": now,
     }
@@ -84,7 +98,10 @@ def register_user(username: str, password: str, response: Response):
 
 
 @app.get("/login")
-def login_user(username: str, password: str, response: Response):
+def login_user(request: LoginRequest, response: Response):
+
+    username = request.username
+    password = request.password
 
     # Get the User data from redis
     raw_user = redis_client.hget(redis_dictionaries[0], username)
@@ -125,10 +142,10 @@ def verify_cookie(session: str = Cookie(None)):
 
     try:
         payload = jwt.decode(session, secret_key, algorithms=[algorithm])
-        user_id = payload.get("name")
-        if not user_id:
+        username = payload.get("username")
+        if not username:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return user_id
+        return username
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
@@ -141,23 +158,23 @@ def verify_cookie(session: str = Cookie(None)):
 def create_account(can_short: bool, username: str = Depends(verify_cookie)):
 
     # Create account
-    account_UUID = str(uuid.uuid4())
+    account_id = str(uuid.uuid4())
     positions = []
     now = datetime.now(timezone.utc).isoformat()
     account_data = {
-        "Positions": positions,
+        "positions": positions,
         "can_short": can_short,
-        "Created_at": now,
-        "Updated_at": now,
+        "created_at": now,
+        "updated_at": now,
     }
 
-    redis_client.hset(redis_dictionaries[1], account_UUID, json.dumps(account_data))
+    redis_client.hset(redis_dictionaries[1], account_id, json.dumps(account_data))
 
     # Grab User to add Account to them
     raw_user = redis_client.hget(redis_dictionaries[0], username)
     user_data = json.loads(raw_user)
 
-    user_data["accounts"].append(account_UUID)
+    user_data["accounts"].append(account_id)
     user_data["updated_at"] = now
 
     redis_client.hset(redis_dictionaries[0], username, json.dumps(user_data))
@@ -212,7 +229,7 @@ def get_users_positions(username: str = Depends(verify_cookie)):
                         "Ticker": x_positions["Ticker"],
                         "Quantity": x_positions["Quantity"],
                         "Created_at": x_positions["Created_at"],
-                        "Update_at": x_positions["Updated_at"],
+                        "Updated_at": x_positions["Updated_at"],
                     }
                 ]
             else:  # This account already processed at least one position
@@ -221,7 +238,7 @@ def get_users_positions(username: str = Depends(verify_cookie)):
                         "Ticker": x_positions["Ticker"],
                         "Quantity": x_positions["Quantity"],
                         "Created_at": x_positions["Created_at"],
-                        "Update_at": x_positions["Updated_at"],
+                        "Updated_at": x_positions["Updated_at"],
                     }
                 )
 
@@ -250,7 +267,7 @@ def get_accounts_positions(account_id: str, username: str = Depends(verify_cooki
             positions[x_positions["Ticker"]] = {
                 "Quantity": x_positions["Quantity"],
                 "Created_at": x_positions["Created_at"],
-                "Update_at": x_positions["Updated_at"],
+                "Updated_at": x_positions["Updated_at"],
             }
 
     return {"message": positions}
@@ -282,7 +299,7 @@ def get_users_positions_for_ticker(ticker: str, username: str = Depends(verify_c
                     "Ticker": x_positions["Ticker"],
                     "Quantity": x_positions["Quantity"],
                     "Created_at": x_positions["Created_at"],
-                    "Update_at": x_positions["Updated_at"],
+                    "Updated_at": x_positions["Updated_at"],
                 }
             ]
 
@@ -328,19 +345,35 @@ def get_accounts_positions_for_ticker(
 
 # Trades
 # region
-@app.post("/trade")
-async def create_trade(trade: dict, username: str = Depends(verify_cookie)):
 
-    # Check ticker exists
-    raw_ticker = await async_redis_client.hget(redis_dictionaries[2], trade["ticker"])
-    if not raw_ticker:
-        raise HTTPException(status_code=404, detail="This ticker does not exist")
+class Trade(BaseModel):
+    account_id: str
+    user_id: str
+    direction: str
+    ticker: str
+    quantity: int
+    price: str
+    other_account: str | None = None
+
+@app.post("/trade")
+async def create_trade(trade: list[Trade], username: str = Depends(verify_cookie)):
+
+    if len(trade) == 0:
+        raise HTTPException(status_code=422, detail="Invalid Trade Data")
+
+    for trade_item in trade:
+        await individual_trade(username, trade_item.model_dump())
+
+    return {"status": "success"}
+
+
+async def individual_trade(username: str, trade: dict):
 
     raw_user = await async_redis_client.hget(redis_dictionaries[0], username)
     if not raw_user:
         raise HTTPException(status_code=404, detail="This user does not exist")
     user_data = json.loads(raw_user)
-    
+
     raw_account = await async_redis_client.hget(
         redis_dictionaries[1], trade["account_id"]
     )
@@ -348,19 +381,27 @@ async def create_trade(trade: dict, username: str = Depends(verify_cookie)):
         raise HTTPException(status_code=404, detail="This account does not exist")
     account_data = json.loads(raw_account)
 
+    if trade["user_id"] != username:
+        raise HTTPException(
+            status_code=401, detail="This user does not match your username"
+        )
+
     # Confirm you have access to this account
     if trade["account_id"] not in user_data["accounts"]:
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
-    
-    elif trade["user_id"] != username:
-        raise HTTPException(
-            status_code=401, detail="This user does not match your username"
-        )
-    
-    elif trade["direction"] not in ("Buy", "Sell"):
+
+    # Check ticker exists
+    raw_ticker = await async_redis_client.hget(redis_dictionaries[2], trade["ticker"])
+    if not raw_ticker:
+        raise HTTPException(status_code=404, detail="This ticker does not exist")
+
+    if trade["direction"] not in ("Buy", "Sell"):
         raise HTTPException(status_code=422, detail="Not a valid Direction")
+
+    if trade["quantity"] < 0:
+        raise HTTPException(status_code=422, detail="Not a valid quantity value")
 
     raw_positions = await async_redis_client.hgetall(redis_dictionaries[3])
     position_key = None
@@ -373,8 +414,7 @@ async def create_trade(trade: dict, username: str = Depends(verify_cookie)):
 
     for key, x in positions.items():
         if (
-            x["Account_id"] == trade["account_id"]
-            and x["Ticker"] == trade["ticker"]
+            x["Account_id"] == trade["account_id"] and x["Ticker"] == trade["ticker"]
         ):  # Correct account and ticker
             position_key = key
             if (
@@ -398,7 +438,7 @@ async def create_trade(trade: dict, username: str = Depends(verify_cookie)):
             raise HTTPException(
                 status_code=403, detail="You do not have permission to short"
             )
-        
+
     payload = {
         "trade_id": str(uuid.uuid4()),
         "account_id": trade["account_id"],
@@ -450,6 +490,7 @@ async def create_trade(trade: dict, username: str = Depends(verify_cookie)):
     await async_redis_client.xadd("trade_stream", {"d": packed_bytes})
 
     return {"status": "success"}
+
 
 
 # endregion
