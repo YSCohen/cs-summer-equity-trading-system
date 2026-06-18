@@ -43,9 +43,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let worker_name =
         env::var("WORKER_NAME").expect("WORKER_NAME environment variable must be set");
 
-    println!("CHECKPOINT: env vars");
+    println!("read env vars");
 
-    let dur = time::Duration::from_millis(500);
+    let dur = time::Duration::from_secs(5);
     sleep(dur);
 
     // connect to postgres
@@ -56,21 +56,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    println!("CHECKPOINT: postgres");
+    println!("connected to postgres");
 
     // connect to redis
     let redis_client = redis::Client::open(redis_url)?;
     let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
 
-    println!("CHECKPOINT: redis");
+    println!("connected to redis");
 
-    // Create Redis Consumer Group dynamically
-    let _: Result<(), _> = redis_conn
-        .xgroup_create(&stream_name, &consumer_group, "0")
+    // Create Redis Consumer Group dynamically and ensure the stream exists
+    let group_create_result: Result<(), redis::RedisError> = redis_conn
+        .xgroup_create_mkstream(&stream_name, &consumer_group, "0")
         .await;
 
+    match group_create_result {
+        Ok(_) => println!("Consumer group '{}' verified/created", consumer_group),
+        Err(e) => {
+            // If the group already exists (BUSYGROUP), we can safely ignore the error on restart.
+            if !e.to_string().contains("BUSYGROUP") {
+                eprintln!("Initializing consumer group failed: {}", e);
+            }
+        }
+    }
     println!(
-        "Pipeline engaged for stream '{}'. Awaiting data...",
+        "Pipeline engaged for stream '{}'",
         stream_name
     );
 
@@ -78,7 +87,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // Fetch batches from the configured redis stream
         let opts = StreamReadOptions::default()
             .group(&consumer_group, &worker_name)
-            .count(5000)
+            .count(3)
             .block(100);
 
         let reply: StreamReadReply = match redis_conn
@@ -158,7 +167,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
 
                 // 4. Acknowledge messages in Redis only after Postgres safe-write confirmation
-                let _: Result<(), _> = redis_conn.xack("trade_stream", "workers", &msg_ids).await;
+                let _: Result<(), _> = redis_conn
+                    .xack(&stream_name, &consumer_group, &msg_ids)
+                    .await;
             }
             Err(e) => {
                 eprintln!("Failed to initialize Postgres COPY stream context: {}", e);
