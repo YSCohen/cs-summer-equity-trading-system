@@ -58,8 +58,25 @@ spec:
                     - localhost
                   labels:
                     job: host_logs
-                    app: booklib
-                    __path__: /var/log/external_host/*.log
+                    app: root_log # Default label for files in the root directory (like app.log)
+                    # The ** tells Promtail to watch the root AND all subfolders
+                    __path__: /var/log/external_host/**/*.log
+              pipeline_stages:
+                # 1. Extract 'app' from the subfolder path
+                # Example: /var/log/external_host/FastAPI/api.log -> app="FastAPI"
+                - regex:
+                    source: filename
+                    expression: "^/var/log/external_host/(?P<app>[^/]+)/.*\\.log$"
+                
+                # 2. Extract 'level' from the log content
+                # Example: [2026-06-17 20:55:41] ERROR: booklib... -> level="ERROR"
+                - regex:
+                    expression: "^\\[.*?\\]\\s+(?P<level>[A-Z]+):"
+                
+                # 3. Apply the extracted variables as official Loki labels
+                - labels:
+                    app:
+                    level:
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress

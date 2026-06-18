@@ -1,0 +1,6 @@
+[2026-06-17 22:40:11] ERROR: Redis: Memory usage spike detected.
+[2026-06-17 22:40:11] ERROR: Redis: Connection established successfully.
+[2026-06-17 22:40:12] WARNING: Redis: Query execution took too long.
+[2026-06-17 22:42:58] ERROR: Redis: Query execution took too long.
+[2026-06-17 22:42:58] INFO: Redis: Timeout occurred while waiting for response.
+[2026-06-17 22:42:59] WARNING: Redis: Connection established successfully.

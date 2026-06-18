@@ -5,10 +5,78 @@
   "refresh": "5s",
   "panels": [
     {
+      "title": "Postgres Path Live Logs",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 10,
+      "options": {
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-local" },
+          "expr": "{app=\"Postgres\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Redis Path Live Logs",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 11,
+      "options": {
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-local" },
+          "expr": "{app=\"Redis\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Streamlit Path Live Logs",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 12,
+      "options": {
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-local" },
+          "expr": "{app=\"Streamlit\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "FastAPI Path Live Logs",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 13,
+      "options": {
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-local" },
+          "expr": "{app=\"FastAPI\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
       "id": 6,
       "title": "FastAPI Live Logs",
       "type": "logs",
-      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 8 },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 24 },
       "datasource": { "type": "loki", "uid": "loki-local" },
       "options": {
         "enableLogDetails": true,
