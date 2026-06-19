@@ -9,6 +9,7 @@ import asyncpg
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
 app = FastAPI()
 # Initalize Data
@@ -57,8 +58,8 @@ def create_cookie(username: str):
 redis_client = AsyncRedis(host=redis_host, port=redis_port_number, db=0)
 
 
-@app.lifespan("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     app.state.pg_pool = await asyncpg.create_pool(
         host=postgress_docker_name,
         port=postgres_port_number,
@@ -66,10 +67,7 @@ async def startup():
         password="password",
         database="trading",
     )
-
-
-@app.lifespan("shutdown")
-async def shutdown():
+    yield
     await app.state.pg_pool.close()
 
 
