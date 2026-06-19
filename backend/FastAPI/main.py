@@ -8,6 +8,7 @@ import msgpack
 import asyncpg
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
+from datetime import time as Time
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -98,7 +99,7 @@ async def register_user(request: RegisterRequest, response: Response):
     password = request.password
 
     # Check if the username already exists in Redis
-    all_user_ids = await redis_client.hget(redis_dictionaries[0])
+    all_user_ids = await redis_client.hgetall(redis_dictionaries[0])
 
     positions = {
         key.decode() if isinstance(key, bytes) else key: json.loads(value)
@@ -146,7 +147,7 @@ async def login_user(request: LoginRequest, response: Response):
     password = request.password
 
     # Get the User data from redis
-    all_user_ids = await redis_client.hget(redis_dictionaries[0])
+    all_user_ids = await redis_client.hgetall(redis_dictionaries[0])
 
     positions = {
         key.decode() if isinstance(key, bytes) else key: json.loads(value)
@@ -265,6 +266,7 @@ async def get_all_accounts(user_id: str = Depends(verify_cookie)):
     user_data = json.loads(raw_user)
 
     return {"message": user_data["accounts"]}
+
 
 # endregion
 
@@ -585,6 +587,7 @@ async def individual_trade(user_id: str, trade: dict):
 
 # endregion
 
+
 # Get trade data
 # region
 
@@ -717,8 +720,8 @@ async def get_specific_trade(
 @app.get("/trades/time/{time_start}/{time_end}")
 async def get_all_user_trades_for_time(
     request: Request,
-    time_start: time,
-    time_end: time,
+    time_start: Time,
+    time_end: Time,
     user_id: str = Depends(verify_cookie),
 ):
 
@@ -742,8 +745,8 @@ async def get_all_user_trades_for_time(
 async def get_all_user_trades_for_account_for_time(
     account_id: str,
     request: Request,
-    time_start: time,
-    time_end: time,
+    time_start: Time,
+    time_end: Time,
     user_id: str = Depends(verify_cookie),
 ):
 
@@ -777,8 +780,8 @@ async def get_all_user_trades_for_account_for_time(
 async def get_all_user_trades_for_ticker_for_time(
     ticker: str,
     request: Request,
-    time_start: time,
-    time_end: time,
+    time_start: Time,
+    time_end: Time,
     user_id: str = Depends(verify_cookie),
 ):
 
@@ -809,8 +812,8 @@ async def get_all_user_trades_for_account_for_ticker_for_time(
     account_id: str,
     ticker: str,
     request: Request,
-    time_start: time,
-    time_end: time,
+    time_start: Time,
+    time_end: Time,
     user_id: str = Depends(verify_cookie),
 ):
 
@@ -841,26 +844,6 @@ async def get_all_user_trades_for_account_for_ticker_for_time(
         ticker,
         time_start,
         time_end,
-    )
-
-    return [dict(row) for row in rows]
-
-
-@app.get("/trades/{trade_id}")
-async def get_specific_trade(
-    trade_id: str, request: Request, user_id: str = Depends(verify_cookie)
-):
-
-    rows = await request.app.state.pg_pool.fetch(
-        """
-        SELECT *
-        FROM trade
-        WHERE user_id = $1
-            AND trade_id = $2
-        ORDER BY trade_time DESC
-        """,
-        user_id,
-        trade_id,
     )
 
     return [dict(row) for row in rows]
