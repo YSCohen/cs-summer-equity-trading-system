@@ -78,16 +78,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
-    println!(
-        "Pipeline engaged for stream '{}'",
-        stream_name
-    );
+    println!("Pipeline engaged for stream '{}'", stream_name);
 
     loop {
         // Fetch batches from the configured redis stream
         let opts = StreamReadOptions::default()
             .group(&consumer_group, &worker_name)
-            .count(3) // CHANGEME - inprod this will be more like 5k
+            .count(10) // CHANGEME - inprod this will be more like 5k
             .block(100);
 
         let reply: StreamReadReply = match redis_conn
@@ -103,7 +100,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         };
 
         let mut msg_ids = Vec::new();
-        let mut copy_buffer = String::new();
+        let mut copy_rows = Vec::new();
 
         for stream_key in reply.keys {
             for record in stream_key.ids {
@@ -138,13 +135,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         trade.price,
                         other_acc
                     );
-                    copy_buffer.push_str(&row);
+                    copy_rows.push(bytes::Bytes::from(row));
                 }
             }
         }
 
         // If no records were processed, loop back and block again
         if msg_ids.is_empty() {
+            continue;
+        }
+
+        if copy_rows.is_empty() {
+            eprintln!(
+                "Read {} Redis message(s) but decoded no trade rows",
+                msg_ids.len()
+            );
             continue;
         }
 
@@ -155,10 +160,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             Ok(sink) => {
                 tokio::pin!(sink);
 
-                // Stream the memory buffer directly to the database system
-                if let Err(e) = sink.send(bytes::Bytes::from(copy_buffer)).await {
-                    eprintln!("Streaming buffer via COPY failed: {}", e);
-                    continue;
+                // Stream each row into the COPY sink
+                for row in copy_rows {
+                    if let Err(e) = sink.send(row).await {
+                        eprintln!("Streaming row via COPY failed: {}", e);
+                        continue;
+                    }
                 }
 
                 if let Err(e) = sink.close().await {
