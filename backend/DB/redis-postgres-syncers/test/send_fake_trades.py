@@ -1,0 +1,66 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.14"
+# dependencies = [
+#     "msgpack>=1.2.1",
+#     "redis>=8.0.0",
+# ]
+# ///
+
+# for testing the trade writer. send A LOT of trades to redis
+
+import asyncio
+import random
+import string
+import time
+import uuid
+import msgpack
+import redis.asyncio as aioredis
+import itertools
+
+# AAA, AAB, ..., ZZY, ZZZ
+# 17_576 combinations
+TICKERS = ["".join(c) for c in itertools.product(string.ascii_uppercase, repeat=3)]
+
+
+async def generate_fake_trades():
+    redis_client = aioredis.from_url("redis://localhost:6379")
+
+    try:
+        for symbol in TICKERS:
+            direction = random.choice(["Buy", "Sell"])
+            quantity = random.randint(1, 500)
+            price = f"{random.uniform(10.0, 1500.0):.2f}"
+            other_account = str(uuid.uuid4()) if random.random() < 0.3 else None
+
+            payload = {
+                "trade_id": str(uuid.uuid4()),
+                "account_id": str(uuid.uuid4()),
+                "user_id": str(uuid.uuid4()),
+                "direction": direction,
+                "symbol_ticker": symbol,
+                "created_at": int(time.time()),
+                "updated_at": int(time.time()),
+                "quantity": quantity,
+                "price": price,
+                "other_account": other_account,
+            }
+
+            packed_bytes = msgpack.packb(payload, use_bin_type=True)
+
+            await redis_client.xadd("trade_stream", {"d": packed_bytes})
+
+            print(f"[SENT] {direction} {quantity} {symbol} @ {price}")
+
+            # # Throttle the loop so it doesn't overwhelm redis
+            # await asyncio.sleep(0.1)
+
+    except asyncio.CancelledError:
+        print("\nStopping the generator safely...")
+    finally:
+        # Gracefully close the Redis connection pool
+        await redis_client.aclose()
+
+
+if __name__ == "__main__":
+    asyncio.run(generate_fake_trades())
