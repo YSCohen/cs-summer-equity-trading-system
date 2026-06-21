@@ -3,6 +3,15 @@ apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:
   name: dev-cluster
+
+# IaC Networking: Force K3d to join Compose's network
+network: k3d-network
+
+# IaC Networking: Write the internal Docker DNS name and port into the kubeconfig
+kubeAPI:
+  host: "k3d-dev-cluster-serverlb"
+  hostPort: "6443"
+
 servers: 1
 agents: 2
 image: rancher/k3s:v1.28.2-k3s1
@@ -26,19 +35,16 @@ files:
     destination: /var/lib/rancher/k3s/server/manifests/00-namespaces.yaml
     nodeFilters:
       - "server:*"
-
   - description: "2. Deploy Backend App"
     source: ./manifests/01-booklib.yaml
     destination: /var/lib/rancher/k3s/server/manifests/01-booklib.yaml
     nodeFilters:
       - "server:*"
-
   - description: "3. Deploy Monitoring (Loki/Grafana)"
     source: ./manifests/02-monitoring.yaml
     destination: /var/lib/rancher/k3s/server/manifests/02-monitoring.yaml
     nodeFilters:
       - "server:*"
-
   - description: "4. Deploy Grafana Dashboards"
     source: ./manifests/03-dashboards.yaml
     destination: /var/lib/rancher/k3s/server/manifests/03-dashboards.yaml
