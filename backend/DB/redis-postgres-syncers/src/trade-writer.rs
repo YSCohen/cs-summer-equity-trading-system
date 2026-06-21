@@ -9,6 +9,7 @@ use std::env;
 use std::error::Error;
 use std::{thread::sleep, time};
 use tokio_postgres::NoTls;
+use tracing::{error, info, warn};
 
 #[derive(Deserialize)]
 struct TradePayload {
@@ -24,26 +25,34 @@ struct TradePayload {
     other_account: Option<String>,
 }
 
+fn error_exit(message: &str) -> ! {
+    error!(message);
+    std::process::exit(1)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    tracing_subscriber::fmt::init();
+
     // get config from env vars
     let _ = dotenv();
 
-    let pg_config =
-        env::var("DATABASE_URL").expect("DATABASE_URL environment variable must be set");
+    let pg_config = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| error_exit("DATABASE_URL environment variable must be set"));
 
-    let redis_url = env::var("REDIS_URL").expect("REDIS_URL environment variable must be set");
+    let redis_url = env::var("REDIS_URL")
+        .unwrap_or_else(|_| error_exit("REDIS_URL environment variable must be set"));
 
-    let stream_name =
-        env::var("REDIS_STREAM_NAME").expect("REDIS_STREAM_NAME environment variable must be set");
+    let stream_name = env::var("REDIS_STREAM_NAME")
+        .unwrap_or_else(|_| error_exit("REDIS_STREAM_NAME environment variable must be set"));
 
     let consumer_group = env::var("REDIS_CONSUMER_GROUP")
-        .expect("REDIS_CONSUMER_GROUP environment variable must be set");
+        .unwrap_or_else(|_| error_exit("REDIS_CONSUMER_GROUP environment variable must be set"));
 
-    let worker_name =
-        env::var("WORKER_NAME").expect("WORKER_NAME environment variable must be set");
+    let worker_name = env::var("WORKER_NAME")
+        .unwrap_or_else(|_| error_exit("WORKER_NAME environment variable must be set"));
 
-    println!("read env vars");
+    info!("read env vars");
 
     let dur = time::Duration::from_secs(5);
     sleep(dur);
@@ -52,17 +61,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
     tokio::spawn(async move {
         if let Err(e) = connection.await {
-            eprintln!("PostgreSQL connection driver error: {}", e);
+            error!("PostgreSQL connection driver error: {}", e);
         }
     });
 
-    println!("connected to postgres");
+    info!("connected to postgres");
 
     // connect to redis
     let redis_client = redis::Client::open(redis_url)?;
     let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
 
-    println!("connected to redis");
+    info!("connected to redis");
 
     // Create Redis Consumer Group dynamically and ensure the stream exists
     let group_create_result: Result<(), redis::RedisError> = redis_conn
@@ -70,21 +79,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await;
 
     match group_create_result {
-        Ok(_) => println!("Consumer group '{}' verified/created", consumer_group),
+        Ok(_) => info!("Consumer group '{}' verified/created", consumer_group),
         Err(e) => {
             // If the group already exists (BUSYGROUP), we can safely ignore the error on restart.
             if !e.to_string().contains("BUSYGROUP") {
-                eprintln!("Initializing consumer group failed: {}", e);
+                error!("Initializing consumer group failed: {}", e);
             }
         }
     }
-    println!("Pipeline engaged for stream '{}'", stream_name);
+    info!("Pipeline engaged for stream '{}'", stream_name);
 
     loop {
         // Fetch batches from the configured redis stream
         let opts = StreamReadOptions::default()
             .group(&consumer_group, &worker_name)
-            .count(10) // CHANGEME - inprod this will be more like 5k
+            .count(5000) // TODO: determine best number
             .block(100);
 
         let reply: StreamReadReply = match redis_conn
@@ -93,7 +102,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("Redis stream read failed: {}", e);
+                warn!("Redis stream read failed: {}", e);
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                 continue;
             }
@@ -108,7 +117,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 // Extract binary payload from the single field "d"
                 let Some(redis::Value::BulkString(bytes)) = record.map.get("d") else {
-                    eprintln!(
+                    warn!(
                         "Redis message {} missing expected binary field 'd': {:?}",
                         record.id, record.map
                     );
@@ -118,7 +127,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 let trade: TradePayload = match rmp_serde::from_slice(bytes) {
                     Ok(trade) => trade,
                     Err(e) => {
-                        eprintln!(
+                        warn!(
                             "Failed to decode MessagePack payload for Redis message {}: {}",
                             record.id, e
                         );
@@ -163,7 +172,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
 
         if copy_rows.is_empty() {
-            eprintln!(
+            warn!(
                 "Read {} Redis message(s) but decoded no trade rows",
                 msg_ids.len()
             );
@@ -171,7 +180,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
 
         // postgres bulk COPY operation
-        let copy_query = "COPY trade (trade_id, account_id, user_id, direction, symbol_ticker, created_at, updated_at, quantity, price, other_account) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')";
+        let copy_query = "COPY trades (trade_id, account_id, user_id, direction, symbol_ticker, created_at, updated_at, quantity, price, other_account) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')";
 
         match pg_client.copy_in(copy_query).await {
             Ok(sink) => {
@@ -180,25 +189,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 // Stream each row into the COPY sink
                 for row in copy_rows {
                     if let Err(e) = sink.send(row).await {
-                        eprintln!("Streaming row via COPY failed: {}", e);
+                        warn!("Streaming row via COPY failed: {}", e);
                         continue;
                     }
                 }
 
                 if let Err(e) = sink.close().await {
-                    eprintln!("Finalizing COPY transaction failed: {}", e);
+                    warn!("Finalizing COPY transaction failed: {}", e);
                     continue;
                 }
 
-                // Acknowledge messages in redis only after Postgres safe-write
+                // Acknowledge messages in redis only after postgres write
                 // confirmation so if postgres was down and this failed, redis
                 // will keep these messages for the next attempt
                 let _: Result<(), _> = redis_conn
                     .xack(&stream_name, &consumer_group, &msg_ids)
                     .await;
+
+                info!("Successfully copied {} rows to trades table", msg_ids.len());
             }
             Err(e) => {
-                eprintln!("Failed to initialize Postgres COPY stream context: {}", e);
+                warn!("Failed to initialize Postgres COPY stream context: {}", e);
             }
         }
     }

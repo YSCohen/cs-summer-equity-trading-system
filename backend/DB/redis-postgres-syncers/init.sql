@@ -2,7 +2,7 @@
 
 CREATE TYPE trade_direction AS ENUM ('Buy', 'Sell');
 
-CREATE TABLE trade (
+CREATE TABLE trades (
     trade_id UUID PRIMARY KEY,
     account_id UUID,
     user_id UUID,
