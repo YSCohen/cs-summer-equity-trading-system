@@ -107,8 +107,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 msg_ids.push(record.id.clone());
 
                 // Extract binary payload from the single field "d"
-                if let Some(redis::Value::BulkString(bytes)) = record.map.get("d")
-                    && let Ok(trade) = rmp_serde::from_slice::<TradePayload>(bytes)
+                let Some(redis::Value::BulkString(bytes)) = record.map.get("d") else {
+                    eprintln!(
+                        "Redis message {} missing expected binary field 'd': {:?}",
+                        record.id, record.map
+                    );
+                    continue;
+                };
+
+                let trade: TradePayload = match rmp_serde::from_slice(bytes) {
+                    Ok(trade) => trade,
+                    Err(e) => {
+                        eprintln!(
+                            "Failed to decode MessagePack payload for Redis message {}: {}",
+                            record.id, e
+                        );
+                        continue;
+                    }
+                };
+
                 {
                     // format dates for postgres text input
                     let created = jiff::Timestamp::from_second(trade.created_at)
