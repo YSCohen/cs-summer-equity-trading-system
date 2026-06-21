@@ -18,9 +18,12 @@ import msgpack
 import redis.asyncio as aioredis
 import itertools
 
-# AAA, AAB, ..., ZZY, ZZZ
-# 17_576 combinations
-TICKERS = ["".join(c) for c in itertools.product(string.ascii_uppercase, repeat=3)]
+# # AAA, AAB, ..., ZZY, ZZZ
+# # 17_576 combinations
+# TICKERS = ["".join(c) for c in itertools.product(string.ascii_uppercase, repeat=3)]
+
+# just 26 tickers
+TICKERS = [c * 3 for c in string.ascii_uppercase]
 
 
 async def generate_fake_trades():
