@@ -1,0 +1,23 @@
+FROM alpine:3.19
+
+# Install base dependencies
+RUN apk add --no-cache curl bash docker-cli openssl
+
+# Install kubectl
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && chmod +x kubectl \
+    && mv kubectl /usr/local/bin/
+
+# Install k3d
+RUN curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+# Install Helm
+RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
+    && chmod 700 get_helm.sh \
+    && ./get_helm.sh
+
+# Set the working directory to match the mount we'll create in compose
+WORKDIR /workspace
+
+# Keep the container running in the background so we can send commands to it
+CMD ["tail", "-f", "/dev/null"]

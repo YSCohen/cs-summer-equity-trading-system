@@ -1,0 +1,140 @@
+{
+  "title": "k3d Stats",
+  "uid": "9mfU3p-vk",
+  "schemaVersion": 34,
+  "refresh": "5s",
+  "panels": [
+    {
+      "title": "Postgres Path Live Logs",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 10,
+      "options": {
+        "enableLogDetails": true,
+        "sortOrder": "Ascending"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-local" },
+          "expr": "{app=\"Postgres\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Redis Path Live Logs",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 11,
+      "options": {
+        "enableLogDetails": true,
+        "sortOrder": "Ascending"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-local" },
+          "expr": "{app=\"Redis\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Streamlit Path Live Logs",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 12,
+      "options": {
+        "enableLogDetails": true,
+        "sortOrder": "Ascending"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-local" },
+          "expr": "{app=\"Streamlit\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "FastAPI Path Live Logs",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 13,
+      "options": {
+        "enableLogDetails": true,
+        "sortOrder": "Ascending"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-local" },
+          "expr": "{app=\"FastAPI\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "FastAPI Live Logs",
+      "type": "logs",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "type": "loki", "uid": "loki-local" },
+      "options": {
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": true,
+        "sortOrder": "Ascending"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-local" },
+          "expr": "{app=\"booklib\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Active FastAPI Nodes",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prom-local" },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prom-local" },
+          "expr": "count(group by (pod) (container_cpu_usage_seconds_total{namespace=\"backend\", container=\"fastapi\"}))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "FastAPI CPU Usage (Cores)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prom-local" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20
+          },
+          "unit": "short"
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prom-local" },
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"backend\", container=\"fastapi\"}[1m])) by (pod)",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

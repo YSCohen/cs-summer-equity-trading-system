@@ -16,11 +16,10 @@ CREATE TABLE trade (
 );
 
 CREATE TABLE positions (
-    position_id INT PRIMARY KEY,
+    position_id UUID PRIMARY KEY,
     account_id UUID,
     symbol_ticker VARCHAR(4),
     quantity INT,
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );
-

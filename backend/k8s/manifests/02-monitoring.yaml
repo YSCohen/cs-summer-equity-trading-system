@@ -1,0 +1,116 @@
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: loki-stack
+  namespace: kube-system
+spec:
+  targetNamespace: monitoring
+  repo: https://grafana.github.io/helm-charts
+  chart: loki-stack
+  version: 2.9.11
+  valuesContent: |-
+    grafana:
+      enabled: true
+      adminPassword: "Rust!"
+      grafana.ini:
+        dashboards:
+          default_home_dashboard_path: /tmp/dashboards/dashboard.json
+      sidecar:
+        dashboards:
+          enabled: true
+          label: grafana_dashboard
+          searchNamespace: ALL
+          folder: /tmp/dashboards
+          provider:
+            allowUiUpdates: true
+          additionalProviders:
+            - name: loki-official
+              orgId: 1
+              folder: 'Loki'
+              type: file
+              disableDeletion: false
+              editable: true
+              options:
+                path: /tmp/dashboards
+    loki:
+      persistence:
+        enabled: false
+    prometheus:
+      enabled: true
+    promtail:
+      enabled: true
+      extraVolumes:
+        - name: external-logs
+          hostPath:
+            path: /var/log/external_host
+      extraVolumeMounts:
+        - name: external-logs
+          mountPath: /var/log/external_host
+          readOnly: true
+      config:
+        clients:
+          - url: http://loki-stack.monitoring.svc.cluster.local:3100/loki/api/v1/push
+        snippets:
+          extraScrapeConfigs: |
+            - job_name: external_host_logs
+              static_configs:
+                - targets:
+                    - localhost
+                  labels:
+                    job: host_logs
+                    app: root_log # Default label for files in the root directory (like app.log)
+                    # The ** tells Promtail to watch the root AND all subfolders
+                    __path__: /var/log/external_host/**/*.log
+              pipeline_stages:
+                # 1. Extract 'app' from the subfolder path
+                # Example: /var/log/external_host/FastAPI/api.log -> app="FastAPI"
+                - regex:
+                    source: filename
+                    expression: "^/var/log/external_host/(?P<app>[^/]+)/.*\\.log$"
+                
+                # 2. Extract 'level' from the log content
+                # Example: [2026-06-17 20:55:41] ERROR: booklib... -> level="ERROR"
+                - regex:
+                    expression: "^\\[.*?\\]\\s+(?P<level>[A-Z]+):"
+                
+                # 3. Apply the extracted variables as official Loki labels
+                - labels:
+                    app:
+                    level:
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+spec:
+  rules:
+    - host: grafana.localhost # We use a specific host to separate it from your API traffic
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: loki-stack-grafana
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: loki-ingress
+  namespace: monitoring
+spec:
+  rules:
+    - host: loki.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: loki-stack
+                port:
+                  number: 3100

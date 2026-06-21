@@ -1,0 +1,38 @@
+---
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: dev-cluster
+servers: 1
+agents: 1 # Only 1 agent needed for local logging
+image: rancher/k3s:v1.28.2-k3s1
+ports:
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer
+options:
+  k3d:
+    wait: true
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true
+volumes:
+  - volume: ${HOST_ROOT}/logs:/var/log/external_host
+    nodeFilters:
+      - agent:0
+files:
+  - description: "1. Create Namespaces"
+    source: ./manifests/00-namespaces.yaml
+    destination: /var/lib/rancher/k3s/server/manifests/00-namespaces.yaml
+    nodeFilters:
+      - "server:*"
+  - description: "2. Deploy Monitoring (Loki/Grafana)"
+    source: ./manifests/02-monitoring.yaml
+    destination: /var/lib/rancher/k3s/server/manifests/02-monitoring.yaml
+    nodeFilters:
+      - "server:*"
+  - description: "3. Deploy Grafana Dashboards"
+    source: ./manifests/03-dashboards.yaml
+    destination: /var/lib/rancher/k3s/server/manifests/03-dashboards.yaml
+    nodeFilters:
+      - "server:*"
