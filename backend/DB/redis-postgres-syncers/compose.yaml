@@ -1,7 +1,7 @@
 services:
     postgres:
-        image: postgres:16-alpine
-        container_name: trade_db
+        image: postgres:18-alpine
+        container_name: postgres
         environment:
             POSTGRES_USER: trade_admin
             POSTGRES_PASSWORD: super_secret_password
@@ -10,18 +10,33 @@ services:
             - "5432:5432"
         volumes:
             - ./init.sql:/docker-entrypoint-initdb.d/init.sql:z
+        # # Start Postgres with verbose logging flags (for debugging)
+        # command:
+        #     - "postgres"
+        #     - "-c"
+        #     - "log_statement=all"
+        #     - "-c"
+        #     - "log_connections=on"
+        #     - "-c"
+        #     - "log_disconnections=on"
+        #     - "-c"
+        #     - "log_error_verbosity=default"
+        #     - "-c"
+        #     - "log_min_messages=info" 
+        #     - "-c"
+        #     - "log_min_error_statement=info"
 
     redis:
-        image: redis:7-alpine
-        container_name: trade_cache
+        image: redis:8-alpine
+        container_name: redis
         ports:
             - "6379:6379"
 
-    rust_worker:
+    trade_writer:
         build:
             context: .
             dockerfile: Containerfile.trade-writer
-        container_name: rust_sync_worker
+        container_name: trade_writer
         depends_on:
             - postgres
             - redis
