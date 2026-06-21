@@ -38,7 +38,7 @@ async def individual_trade(trade: dict):
         "account_id": trade["account_id"],
         "user_id": trade["user_id"],
         "direction": trade["direction"],
-        "ticker": trade["ticker"],
+        "symbol_ticker": trade["ticker"],
         "created_at": int(time.time()),
         "updated_at": int(time.time()),
         "quantity": int(trade["quantity"]),

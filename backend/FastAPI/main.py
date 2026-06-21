@@ -498,7 +498,7 @@ async def individual_trade(username: str, trade: dict):
         "account_id": trade["account_id"],
         "user_id": trade["user_id"],
         "direction": trade["direction"],  # Must be exact string: 'Buy' or 'Sell'
-        "ticker": trade["ticker"],
+        "symbol_ticker": trade["ticker"],
         "created_at": int(
             time.time()
         ),  # Unix timestamps for lightning-fast serializing
