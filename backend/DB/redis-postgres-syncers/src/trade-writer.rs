@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // Fetch batches from the configured redis stream
         let opts = StreamReadOptions::default()
             .group(&consumer_group, &worker_name)
-            .count(3)
+            .count(3) // CHANGEME - inprod this will be more like 5k
             .block(100);
 
         let reply: StreamReadReply = match redis_conn
@@ -166,7 +166,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     continue;
                 }
 
-                // 4. Acknowledge messages in Redis only after Postgres safe-write confirmation
+                // Acknowledge messages in redis only after Postgres safe-write
+                // confirmation so if postgres was down and this failed, redis
+                // will keep these messages for the next attempt
                 let _: Result<(), _> = redis_conn
                     .xack(&stream_name, &consumer_group, &msg_ids)
                     .await;
