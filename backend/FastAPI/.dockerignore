@@ -10,6 +10,7 @@
 **/.toolstarget
 **/.vs
 **/.vscode
+**/.pytest_cache
 **/*.*proj.user
 **/*.dbmdl
 **/*.jfm
@@ -23,5 +24,7 @@
 **/obj
 **/secrets.dev.yaml
 **/values.dev.yaml
+requirements-dev.txt
+test_main.py
 LICENSE
 README.md
