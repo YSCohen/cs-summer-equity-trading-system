@@ -92,15 +92,25 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .count(5000) // TODO: determine best number
             .block(100);
 
-        let reply: StreamReadReply = match redis_conn
-            .xread_options(&[&stream_name], &[&stream_id], &opts)
-            .await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                warn!("Redis stream read failed: {}", e);
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                continue;
+        // (these two vars need to be assigned because of lifetime magic in the select! macro)
+        let keys = [&stream_name];
+        let ids = [&stream_id];
+
+        // Select between waiting for Redis stream entries or a shutdown signal:
+        let reply: StreamReadReply = tokio::select! {
+            res = redis_conn.xread_options(&keys, &ids, &opts) => {
+                match res {
+                    Ok(r) => r,
+                    Err(e) => {
+                        warn!("Redis stream read failed: {}", e);
+                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        continue;
+                    }
+                }
+            }
+            _ = shutdown_signal() => {
+                info!("Shutdown signal received. Exiting loop gracefully...");
+                return Ok(());
             }
         };
 
@@ -206,5 +216,25 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 error!("Failed to initialize Postgres COPY context: {}", e);
             }
         }
+    }
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install SIGTERM handler");
+    };
+
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
     }
 }
