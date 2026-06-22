@@ -7,9 +7,9 @@ edition = "2024"
 name = "trade-writer"
 path = "src/trade-writer.rs"
 
-# [[bin]]
-# name = "db-syncer"
-# path = "src/db-syncer.rs"
+[[bin]]
+name = "db-syncer"
+path = "src/db-syncer.rs"
 
 [dependencies]
 tokio = { version = "1.52", features = ["full"] }
