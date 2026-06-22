@@ -12,7 +12,6 @@ import csv
 import sys
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
-from datetime import time as Time
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -405,7 +404,7 @@ async def get_users_positions(user_id: str = Depends(verify_cookie)):
             if (
                 x_positions["account_id"] not in positions
             ):  # First time adding a position for that account
-                positions[x_positions["Account_id"]] = [
+                positions[x_positions["account_id"]] = [
                     {
                         "symbol_ticker": x_positions["symbol_ticker"],
                         "quantity": x_positions["quantity"],
@@ -481,7 +480,7 @@ async def get_users_positions_for_ticker(
             x_positions["account_id"] in user_data["accounts_associated"]
             and x_positions["symbol_ticker"] == ticker
         ):  # You own this account and it's the right ticker
-            positions[x_positions["Account_id"]] = [
+            positions[x_positions["account_id"]] = [
                 {
                     "symbol_ticker": x_positions["symbol_ticker"],
                     "quantity": x_positions["quantity"],
@@ -648,16 +647,15 @@ async def individual_trade(user_id: str, trade: dict):
             )
 
     trade_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
     payload = {
         "trade_id": trade_id,
         "account_id": trade["account_id"],
         "user_id": trade["user_id"],
         "direction": trade["direction"],  # Must be exact string: 'Buy' or 'Sell'
         "symbol_ticker": trade["ticker"],
-        "created_at": int(
-            time.time()
-        ),  # Unix timestamps for lightning-fast serializing
-        "updated_at": int(time.time()),
+        "created_at": now,
+        "updated_at": now,
         "quantity": int(trade["quantity"]),
         "price": str(trade["price"]),  # Kept as string for Postgres NUMERIC ingestion
         "other_account": trade.get("other_account"),  # Can be None/Null
@@ -665,8 +663,6 @@ async def individual_trade(user_id: str, trade: dict):
 
     # Pack to raw binary
     packed_bytes = msgpack.packb(payload)
-
-    now = datetime.now(timezone.utc).isoformat()
 
     if position_key is None:  # The position does not exist, create new one
         new_position = (
@@ -740,7 +736,7 @@ async def get_all_user_trades_for_account(
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
-    if account_id not in user_data["accounts"]:
+    if account_id not in user_data["accounts_associated"]:
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
@@ -793,7 +789,7 @@ async def get_all_user_trades_for_account_for_ticker(
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
-    if account_id not in user_data["accounts"]:
+    if account_id not in user_data["accounts_associated"]:
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
@@ -836,11 +832,11 @@ async def get_specific_trade(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/time/{time_start}/{time_end}")
+@app.get("/trades/time")
 async def get_all_user_trades_for_time(
     request: Request,
-    time_start: Time,
-    time_end: Time,
+    time_start: datetime,
+    time_end: datetime,
     user_id: str = Depends(verify_cookie),
 ):
     logger.info("Recieved request for trade data")
@@ -861,12 +857,12 @@ async def get_all_user_trades_for_time(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/account/{account_id}/time/{time_start}/{time_end}")
+@app.get("/trades/account/{account_id}/time")
 async def get_all_user_trades_for_account_for_time(
     account_id: str,
     request: Request,
-    time_start: Time,
-    time_end: Time,
+    time_start: datetime,
+    time_end: datetime,
     user_id: str = Depends(verify_cookie),
 ):
     logger.info("Recieved request for trade data. Completed in {duration_ms:2f}ms")
@@ -874,7 +870,7 @@ async def get_all_user_trades_for_account_for_time(
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
-    if account_id not in user_data["accounts"]:
+    if account_id not in user_data["accounts_associated"]:
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
@@ -897,12 +893,12 @@ async def get_all_user_trades_for_account_for_time(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/ticker/{ticker}/time/{time_start}/{time_end}")
+@app.get("/trades/ticker/{ticker}/time")
 async def get_all_user_trades_for_ticker_for_time(
     ticker: str,
     request: Request,
-    time_start: Time,
-    time_end: Time,
+    time_start: datetime,
+    time_end: datetime,
     user_id: str = Depends(verify_cookie),
 ):
     logger.info("Recieved request for trade data")
@@ -925,13 +921,13 @@ async def get_all_user_trades_for_ticker_for_time(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/account/{account_id}/ticker/{ticker}/time/{time_start}/{time_end}")
+@app.get("/trades/account/{account_id}/ticker/{ticker}/time")
 async def get_all_user_trades_for_account_for_ticker_for_time(
     account_id: str,
     ticker: str,
     request: Request,
-    time_start: Time,
-    time_end: Time,
+    time_start: datetime,
+    time_end: datetime,
     user_id: str = Depends(verify_cookie),
 ):
     logger.info("Recieved request for trade data")
@@ -939,7 +935,7 @@ async def get_all_user_trades_for_account_for_ticker_for_time(
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
-    if account_id not in user_data["accounts"]:
+    if account_id not in user_data["accounts_associated"]:
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
