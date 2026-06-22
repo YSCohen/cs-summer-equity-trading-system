@@ -6,6 +6,7 @@ import json
 import time
 import msgpack
 import asyncpg
+import os
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 from datetime import time as Time
@@ -17,40 +18,38 @@ from prometheus_fastapi_instrumentator import Instrumentator
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.pg_pool = await asyncpg.create_pool(
-        host=postgress_docker_name,
+        host=postgres_docker_name,
         port=postgres_port_number,
-        user="postgres",
-        password="password",
-        database="trading",
+        user=postgres_user,
+        password=postgres_password,
+        database=postgres_db,
     )
     yield
     await app.state.pg_pool.close()
 
 
-app = FastAPI()  # TODO lifespan=lifespan
+postgres_port_number = int(os.getenv("POSTGRES_PORT", "5432"))
+postgres_docker_name = os.getenv("POSTGRES_HOST", "localhost")
+postgres_user = os.getenv("POSTGRES_USER", "postgres")
+postgres_password = os.getenv("POSTGRES_PASSWORD", "password")
+postgres_db = os.getenv("POSTGRES_DB", "trading")
+
+app = FastAPI(lifespan=lifespan)  # TODO lifespan=lifespan
+
 # Initalize Data
 # region
 
 
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
-redis_port_number = (
-    6379  # Default Redis port TODO update this port once agreed upon port
-)
-redis_host = "redis"  # Redis host address TODO update this address once agreed upon
+redis_port_number = int(os.getenv("REDIS_PORT", "6379"))
+redis_host = os.getenv("REDIS_HOST", "localhost")
 redis_dictionaries = [
     "Users",
     "Accounts",
     "Tickers",
     "Positions",
 ]  # redis dicts TODO update these tables once agrred upon naming convention
-
-postgres_port_number = (
-    5422  # Default Postgres port TODO update this port once agreed upon port
-)
-postgress_docker_name = (
-    "postgress"  # Postgress host address TODO update this address once agreed upon
-)
 
 day_in_sec = 24 * 60 * 60  # Number of seconds in a day
 
@@ -482,7 +481,7 @@ async def individual_trade(user_id: str, trade: dict):
     # Check ticker exists
     raw_ticker = await redis_client.hget(redis_dictionaries[2], trade["ticker"])
     if not raw_ticker:
-        raise HTTPException(status_code=404, detail="This ticker does not exist")
+        raise HTTPException(status_code=422, detail="This ticker does not exist")
 
     # Ensure calid direction
     if trade["direction"] not in ("Buy", "Sell"):
@@ -598,9 +597,9 @@ async def get_all_user_trades(request: Request, user_id: str = Depends(verify_co
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
         user_id,
     )
@@ -624,10 +623,10 @@ async def get_all_user_trades_for_account(
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND account_id = $2
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
         user_id,
         account_id,
@@ -648,10 +647,10 @@ async def get_all_user_trades_for_ticker(
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND ticker = $2
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
         user_id,
         ticker,
@@ -683,11 +682,11 @@ async def get_all_user_trades_for_account_for_ticker(
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND account_id = $2
             AND ticker = $3
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
         user_id,
         account_id,
@@ -705,10 +704,10 @@ async def get_specific_trade(
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND trade_id = $2
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
         user_id,
         trade_id,
@@ -728,10 +727,10 @@ async def get_all_user_trades_for_time(
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND created_at BETWEEN $2 AND $3
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
         user_id,
         time_start,
@@ -761,11 +760,11 @@ async def get_all_user_trades_for_account_for_time(
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND account_id = $2
             AND created_at BETWEEN $3 AND $4
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
         user_id,
         account_id,
@@ -792,11 +791,11 @@ async def get_all_user_trades_for_ticker_for_time(
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND ticker = $2
             AND created_at BETWEEN $3 AND $4
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
         user_id,
         ticker,
@@ -832,12 +831,12 @@ async def get_all_user_trades_for_account_for_ticker_for_time(
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND account_id = $2
             AND ticker = $3
             AND created_at BETWEEN $4 AND $5
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
         user_id,
         account_id,
