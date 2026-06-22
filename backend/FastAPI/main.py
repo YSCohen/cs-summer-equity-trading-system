@@ -7,6 +7,7 @@ import time
 import msgpack
 import asyncpg
 import os
+import csv
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 from datetime import time as Time
@@ -14,9 +15,10 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from prometheus_fastapi_instrumentator import Instrumentator
 
-
+valid_tickers = set()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global valid_tickers
     app.state.pg_pool = await asyncpg.create_pool(
         host=postgres_docker_name,
         port=postgres_port_number,
@@ -24,6 +26,10 @@ async def lifespan(app: FastAPI):
         password=postgres_password,
         database=postgres_db,
     )
+    with open("sp500.csv", newline="") as file:
+        reader = csv.DictReader(file)
+        valid_tickers = {row["ticker"].upper() for row in reader}
+
     yield
     await app.state.pg_pool.close()
 
@@ -355,11 +361,6 @@ async def get_users_positions_for_ticker(
     ticker: str, user_id: str = Depends(verify_cookie)
 ):
 
-    # Confirm it's a real ticker
-    raw_ticker = await redis_client.hget(redis_dictionaries[2], ticker)
-    if not raw_ticker:
-        raise HTTPException(status_code=404, detail="This ticker does not exist")
-
     # Get User data
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
@@ -391,11 +392,6 @@ async def get_users_positions_for_ticker(
 async def get_accounts_positions_for_ticker(
     ticker: str, account_id: str, user_id: str = Depends(verify_cookie)
 ):
-
-    # Check ticker exists
-    raw_ticker = await redis_client.hget(redis_dictionaries[2], ticker)
-    if not raw_ticker:
-        raise HTTPException(status_code=404, detail="This ticker does not exist")
 
     # Grab User data
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
@@ -483,9 +479,11 @@ async def individual_trade(user_id: str, trade: dict):
         )
 
     # Check ticker exists
-    raw_ticker = await redis_client.hget(redis_dictionaries[2], trade["ticker"])
-    if not raw_ticker:
-        raise HTTPException(status_code=422, detail="This ticker does not exist")
+    if trade["ticker"] not in valid_tickers:
+        raise HTTPException(
+            status_code=422,
+            detail="Ticker does not exist"
+        )
 
     # Ensure calid direction
     if trade["direction"] not in ("Buy", "Sell"):

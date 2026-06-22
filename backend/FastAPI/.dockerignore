@@ -24,8 +24,7 @@
 **/obj
 **/secrets.dev.yaml
 **/values.dev.yaml
-requirements-dec.txt
+requirements-dev.txt
 test_main.py
-schema.sql
 LICENSE
 README.md
