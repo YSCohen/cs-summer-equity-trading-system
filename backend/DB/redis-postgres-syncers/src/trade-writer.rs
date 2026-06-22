@@ -38,7 +38,7 @@ async fn main() {
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _ = dotenv();
 
-    let pg_config = env::var("DATABASE_URL").map_err(|_| "DATABASE_URL must be set")?;
+    let pg_config = env::var("POSTGRES_CONFIG").map_err(|_| "POSTGRES_CONFIG must be set")?;
     let redis_url = env::var("REDIS_URL").map_err(|_| "REDIS_URL must be set")?;
     let stream_name = env::var("REDIS_STREAM_NAME").map_err(|_| "REDIS_STREAM_NAME must be set")?;
     let consumer_group =
