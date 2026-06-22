@@ -26,27 +26,25 @@ options:
     updateDefaultKubeconfig: true
     switchCurrentContext: true
 volumes:
-  - volume: ${HOST_ROOT}/logs:/var/log/external_host
+  - volume: ${HOST_ROOT}/logs:/var/log/external_host:z
     nodeFilters:
       - agent:0
+  - volume: ${HOST_ROOT}/backend/Locust:/mnt/locust:z
+    nodeFilters:
+      - "all"
 files:
-  - description: "1. Create Namespaces"
-    source: ./manifests/00-namespaces.yaml
-    destination: /var/lib/rancher/k3s/server/manifests/00-namespaces.yaml
+  - description: "1. Bootstrap Flux Controllers"
+    source: ./flux-system/gotk-components.yaml
+    destination: /var/lib/rancher/k3s/server/manifests/01-gotk-components.yaml
     nodeFilters:
       - "server:*"
-  - description: "2. Deploy Backend App"
-    source: ./manifests/01-booklib.yaml
-    destination: /var/lib/rancher/k3s/server/manifests/01-booklib.yaml
+  - description: "2. Deploy GitRepo Pointer"
+    source: ./flux-system/targets/target-fork.yaml # <-- Change this to target-upstream.yaml to test Prod!
+    destination: /var/lib/rancher/k3s/server/manifests/02-git-repo.yaml
     nodeFilters:
       - "server:*"
-  - description: "3. Deploy Monitoring (Loki/Grafana)"
-    source: ./manifests/02-monitoring.yaml
-    destination: /var/lib/rancher/k3s/server/manifests/02-monitoring.yaml
-    nodeFilters:
-      - "server:*"
-  - description: "4. Deploy Grafana Dashboards"
-    source: ./manifests/03-dashboards.yaml
-    destination: /var/lib/rancher/k3s/server/manifests/03-dashboards.yaml
+  - description: "3. Deploy Kustomization Sync"
+    source: ./flux-system/flux-kustomization.yaml
+    destination: /var/lib/rancher/k3s/server/manifests/03-flux-kustomization.yaml
     nodeFilters:
       - "server:*"

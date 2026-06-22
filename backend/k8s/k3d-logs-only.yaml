@@ -30,17 +30,17 @@ volumes:
     nodeFilters:
       - agent:0
 files:
-  - description: "1. Create Namespaces"
+  - description: "Create Namespaces"
     source: ./manifests/00-namespaces.yaml
     destination: /var/lib/rancher/k3s/server/manifests/00-namespaces.yaml
     nodeFilters:
       - "server:*"
-  - description: "2. Deploy Monitoring (Loki/Grafana)"
+  - description: "Deploy Monitoring (Loki/Grafana)"
     source: ./manifests/02-monitoring.yaml
     destination: /var/lib/rancher/k3s/server/manifests/02-monitoring.yaml
     nodeFilters:
       - "server:*"
-  - description: "3. Deploy Grafana Dashboards"
+  - description: "Deploy Grafana Dashboards"
     source: ./manifests/03-dashboards.yaml
     destination: /var/lib/rancher/k3s/server/manifests/03-dashboards.yaml
     nodeFilters:

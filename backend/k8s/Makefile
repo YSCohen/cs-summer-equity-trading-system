@@ -1,8 +1,9 @@
-.PHONY: toolbox-up toolbox-down cluster-up cluster-down shell run kubectl rebuild logs-up logs-rebuild grafana-pass
+.PHONY: toolbox-up toolbox-down cluster-up cluster-down shell run kubectl rebuild logs-up logs-rebuild grafana-pass apply sync-dashboard test test-stop status status-wide status-svc
 
 # Allow overriding the container engine (defaults to docker)
 DOCKER ?= docker
 HOST_ROOT := $(shell cd ../.. && pwd)
+export HOST_ROOT
 
 # Starts the toolbox container in the background
 toolbox-up:
@@ -15,7 +16,7 @@ toolbox-down:
 # Uses the toolbox to create the K3s cluster. Manifests are auto-injected via config!
 cluster-up: toolbox-up
 	@echo "Spinning up the cluster and auto-deploying manifests..."
-	$(DOCKER) exec k8s-toolbox k3d cluster create --config backend/k8s/k3d-config.yaml
+	$(DOCKER) exec -e HOST_ROOT="$(HOST_ROOT)" -i k8s-toolbox k3d cluster create --config backend/k8s/k3d-config.yaml
 	@echo "Cluster is ready and resources are deploying!"
 
 # Uses the toolbox to delete the cluster
@@ -57,11 +58,44 @@ run:
 kubectl:
 	@$(DOCKER) exec -it k8s-toolbox kubectl $(CMD)
 
-# The "Apply" command to manually refresh manifests if you don't want to rebuild
-apply:
-	@tar -cf - manifests/ | $(DOCKER) exec -i k8s-toolbox sh -c "tar -xf - && kubectl apply -f manifests/"
+# Run this via: make test
+test:
+	@echo "Awakening Locust from Scale-to-Zero..."
+	@$(DOCKER) exec -i k8s-toolbox kubectl scale deployment locust-load-tester --replicas=1
+	@echo "Waiting for pod to be ready (this may take up to 60 seconds)..."
+	@$(DOCKER) exec -i k8s-toolbox kubectl wait --for=condition=available --timeout=60s deployment/locust-load-tester || \
+		(echo "❌ TIMEOUT! Fetching crash logs..." && \
+		$(DOCKER) exec -i k8s-toolbox kubectl get pods -l app=locust && \
+		echo "--- POD LOGS ---" && \
+		$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=locust && exit 1)
+	@echo "✅ Locust is running!"
+	@echo "🌐 Open your browser to http://locust.localhost:8080"
 
-sync-dashboard:
-	@$(DOCKER) exec -i k8s-toolbox sh -c "kubectl create configmap fastapi-developer-dashboard --from-file=dashboard.json=./manifests/dashboard.json -n monitoring --dry-run=client -o yaml | kubectl apply -f -"
-	@$(DOCKER) exec -i k8s-toolbox kubectl label configmap fastapi-developer-dashboard -n monitoring grafana_dashboard=1 --overwrite
-	@echo "Dashboard synced! Refresh Grafana in your browser."
+test-stop:
+	@echo "Putting Locust back to sleep..."
+	@$(DOCKER) exec -i k8s-toolbox kubectl scale deployment locust-load-tester --replicas=0
+
+# ==========================================
+# 📊 CLUSTER STATUS DASHBOARDS
+# ==========================================
+
+# Get a quick overview of all running pods
+status:
+	@echo "🟢 CURRENT POD STATUS:"
+	@$(DOCKER) exec -it k8s-toolbox kubectl get pods -A
+
+# Get a detailed, wide view of all pods (IPs, Nodes, Readiness)
+status-wide:
+	@echo "🌐 WIDE POD OVERVIEW:"
+	@$(DOCKER) exec -it k8s-toolbox kubectl get pods -A -o wide
+
+# See all active network services and their exposed ports
+status-svc:
+	@echo "🔌 ACTIVE NETWORK SERVICES:"
+	@$(DOCKER) exec -it k8s-toolbox kubectl get svc -A
+
+sync: 
+	docker exec -it k8s-toolbox flux reconcile kustomization dev-stack --with-source
+
+reload-grafana:
+	@$(DOCKER) exec -it k8s-toolbox kubectl delete pod -l app.kubernetes.io/name=grafana -n monitoring

@@ -1,0 +1,17 @@
+[project]
+name = "trading-api"
+version = "0.1.0"
+description = "API for booking trades"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "redis",
+    "asyncpg",
+    "pyjwt",
+    "prometheus-fastapi-instrumentator",
+    "msgpack>=1.2.1",
+    "passlib[bcrypt]>=1.7.4",
+    "argon2-cffi>=25.1.0",
+]

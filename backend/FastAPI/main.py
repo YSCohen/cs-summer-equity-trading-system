@@ -6,32 +6,58 @@ import json
 import time
 import msgpack
 import asyncpg
+import os
+import csv
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
+from datetime import time as Time
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
+from prometheus_fastapi_instrumentator import Instrumentator
 
-app = FastAPI()
+valid_tickers = set()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global valid_tickers
+    app.state.pg_pool = await asyncpg.create_pool(
+        host=postgres_docker_name,
+        port=postgres_port_number,
+        user=postgres_user,
+        password=postgres_password,
+        database=postgres_db,
+    )
+    with open("sp500.csv", newline="") as file:
+        reader = csv.DictReader(file)
+        valid_tickers = {row["ticker"].upper() for row in reader}
+
+    yield
+    await app.state.pg_pool.close()
+
+
+postgres_port_number = int(os.getenv("POSTGRES_PORT", "5432"))
+postgres_docker_name = os.getenv("POSTGRES_HOST", "localhost")
+postgres_user = os.getenv("POSTGRES_USER", "postgres")
+postgres_password = os.getenv("POSTGRES_PASSWORD", "password")
+postgres_db = os.getenv("POSTGRES_DB", "trading")
+
+app = FastAPI(lifespan=lifespan)  # TODO lifespan=lifespan
+
 # Initalize Data
 # region
 
 
-redis_port_number = (
-    6379  # Default Redis port TODO update this port once agreed upon port
-)
-redis_host = "localhost"  # Redis host address TODO update this address once agreed upon
-redis_dictionaries = [
-    "Users",
-    "Accounts",
-    "Tickers",
-    "Positions",
-]  # redis dicts TODO update these tables once agrred upon naming convention
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
-postgres_port_number = (
-    5422  # Default Postgres port TODO update this port once agreed upon port
-)
-postgress_docker_name = (
-    "postgress"  # Postgress host address TODO update this address once agreed upon
-)
+redis_port_number = int(os.getenv("REDIS_PORT", "6379"))
+redis_host = os.getenv("REDIS_HOST", "localhost")
+redis_dictionaries = [
+    "users",
+    "accounts",
+    "Tickers",
+    "positions",
+]  # redis dicts TODO update these tables once agrred upon naming convention
 
 day_in_sec = 24 * 60 * 60  # Number of seconds in a day
 
@@ -39,7 +65,7 @@ secret_key = (
     "mysecretkey"  # Encryption Key for passwords TODO come up with something better
 )
 algorithm = "HS256"
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 def create_cookie(username: str):
@@ -55,22 +81,6 @@ def create_cookie(username: str):
 
 # Initialize Redis client
 redis_client = AsyncRedis(host=redis_host, port=redis_port_number, db=0)
-
-
-@app.lifespan("startup")
-async def startup():
-    app.state.pg_pool = await asyncpg.create_pool(
-        host=postgress_docker_name,
-        port=postgres_port_number,
-        user="postgres",
-        password="password",
-        database="trading",
-    )
-
-
-@app.lifespan("shutdown")
-async def shutdown():
-    await app.state.pg_pool.close()
 
 
 # endregion
@@ -96,26 +106,34 @@ async def register_user(request: RegisterRequest, response: Response):
     password = request.password
 
     # Check if the username already exists in Redis
-    if await redis_client.hexists(redis_dictionaries[0], username):
-        raise HTTPException(status_code=409, detail="Username already exists")
+    all_user_ids = await redis_client.hgetall(redis_dictionaries[0])
+
+    positions = {
+        key.decode() if isinstance(key, bytes) else key: json.loads(value)
+        for key, value in all_user_ids.items()
+    }  # Turn all positions into valid dictionaries and not bytes
+
+    for user in positions.values():
+        if username == user["username"]:
+            raise HTTPException(status_code=409, detail="Username already exists")
 
     # Create new User data
     user_id = str(uuid.uuid4())
     account_ids = []
     now = datetime.now(timezone.utc).isoformat()
     user_data = {
-        "user_id": user_id,
-        "password_hash": pwd_context.hash(password),
-        "accounts": account_ids,
+        "username": username,
+        "oauth_key": pwd_context.hash(password),
+        "accounts_associated": account_ids,
         "created_at": now,
         "updated_at": now,
     }
 
     # send new User to redis
-    await redis_client.hset(redis_dictionaries[0], username, json.dumps(user_data))
+    await redis_client.hset(redis_dictionaries[0], user_id, json.dumps(user_data))
 
     # Create token for authentication
-    authentication_cookie = create_cookie(username)
+    authentication_cookie = create_cookie(user_id)
     response.set_cookie(
         key="session",
         value=authentication_cookie,
@@ -124,7 +142,9 @@ async def register_user(request: RegisterRequest, response: Response):
         max_age=day_in_sec,
     )
 
-    return {"message": "User registered successfully."}
+    return {
+        "message": f"User registered successfully, your user_id is {user_id}. Save it somewhere safe."
+    }
 
 
 @app.post("/login")
@@ -134,16 +154,28 @@ async def login_user(request: LoginRequest, response: Response):
     password = request.password
 
     # Get the User data from redis
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
-    if not raw_user:  # No such user exists
-        raise HTTPException(status_code=401, detail="Wrong Username or Password")
+    all_user_ids = await redis_client.hgetall(redis_dictionaries[0])
 
-    user_data = json.loads(raw_user)
-    if not pwd_context.verify(password, user_data["password_hash"]):  # Wrong password
+    positions = {
+        key.decode() if isinstance(key, bytes) else key: json.loads(value)
+        for key, value in all_user_ids.items()
+    }  # Turn all positions into valid dictionaries and not bytes
+
+    valid = False
+    id = None
+
+    for user_id, user in positions.items():
+        if username == user["username"] and pwd_context.verify(
+            password, user["oauth_key"]
+        ):
+            valid = True
+            id = user_id
+
+    if not valid:  # No such user exists or wrong password
         raise HTTPException(status_code=401, detail="Wrong Username or Password")
 
     # Create token for authentication
-    authentication_cookie = create_cookie(username)
+    authentication_cookie = create_cookie(id)
     response.set_cookie(
         key="session",
         value=authentication_cookie,
@@ -172,10 +204,10 @@ async def verify_cookie(session: str = Cookie(None)):
 
     try:
         payload = jwt.decode(session, secret_key, algorithms=[algorithm])
-        username = payload.get("username")
-        if not username:
+        user_id = payload.get("username")
+        if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return (username,)
+        return user_id
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
@@ -185,13 +217,16 @@ async def verify_cookie(session: str = Cookie(None)):
 # Account details
 # region
 @app.post("/users/account")
-async def create_account(can_short: bool, username: str = Depends(verify_cookie)):
+async def create_account(
+    account_name: str, can_short: bool, user_id: str = Depends(verify_cookie)
+):
 
     # Create account
     account_id = str(uuid.uuid4())
     positions = []
     now = datetime.now(timezone.utc).isoformat()
     account_data = {
+        "account_name": account_name,
         "positions": positions,
         "can_short": can_short,
         "created_at": now,
@@ -201,19 +236,21 @@ async def create_account(can_short: bool, username: str = Depends(verify_cookie)
     await redis_client.hset(redis_dictionaries[1], account_id, json.dumps(account_data))
 
     # Grab User to add Account to them
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
-    user_data["accounts"].append(account_id)
+    user_data["accounts_associated"].append(account_id)
     user_data["updated_at"] = now
 
-    await redis_client.hset(redis_dictionaries[0], username, json.dumps(user_data))
+    await redis_client.hset(redis_dictionaries[0], user_id, json.dumps(user_data))
 
-    return {"message": "Account created"}
+    return {
+        "message": f"Account created, here is you account_id {account_id}. Save it somewhere safe"
+    }
 
 
 @app.post("/users/accounts/{account_id}")
-async def add_account(account_id: str, username: str = Depends(verify_cookie)):
+async def add_account(account_id: str, user_id: str = Depends(verify_cookie)):
 
     # Get account to ensure it exists
     raw_account = await redis_client.hget(redis_dictionaries[1], account_id)
@@ -221,15 +258,24 @@ async def add_account(account_id: str, username: str = Depends(verify_cookie)):
         raise HTTPException(status_code=404, detail="This account does not exist")
 
     # Grab User to add account to them
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
-    user_data["accounts"].append(account_id)
+    user_data["accounts_associated"].append(account_id)
     user_data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    await redis_client.hset(redis_dictionaries[0], username, json.dumps(user_data))
+    await redis_client.hset(redis_dictionaries[0], user_id, json.dumps(user_data))
 
-    return {"message": f"Account added to user {username}"}
+    return {"message": f"Account added to user {user_data['username']}"}
+
+
+@app.get("/users/allaccounts")
+async def get_all_accounts(user_id: str = Depends(verify_cookie)):
+
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    user_data = json.loads(raw_user)
+
+    return {"message": user_data["accounts_associated"]}
 
 
 # endregion
@@ -240,10 +286,10 @@ async def add_account(account_id: str, username: str = Depends(verify_cookie)):
 
 
 @app.get("/positions")
-async def get_users_positions(username: str = Depends(verify_cookie)):
+async def get_users_positions(user_id: str = Depends(verify_cookie)):
 
     # Get User data to check their accounts
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
     positions = {}
@@ -254,26 +300,26 @@ async def get_users_positions(username: str = Depends(verify_cookie)):
     for x in raw_positions.values():
         x_positions = json.loads(x)
         if (
-            x_positions["Account_id"] in user_data["accounts"]
+            x_positions["account_id"] in user_data["accounts_associated"]
         ):  # This positions is your account
             if (
-                x_positions["Account_id"] not in positions
+                x_positions["account_id"] not in positions
             ):  # First time adding a position for that account
                 positions[x_positions["Account_id"]] = [
                     {
-                        "Ticker": x_positions["Ticker"],
-                        "Quantity": x_positions["Quantity"],
-                        "Created_at": x_positions["Created_at"],
-                        "Updated_at": x_positions["Updated_at"],
+                        "symbol_ticker": x_positions["symbol_ticker"],
+                        "quantity": x_positions["quantity"],
+                        "created_at": x_positions["created_at"],
+                        "updated_at": x_positions["updated_at"],
                     }
                 ]
             else:  # This account already processed at least one position
-                positions[x_positions["Account_id"]].append(
+                positions[x_positions["account_id"]].append(
                     {
-                        "Ticker": x_positions["Ticker"],
-                        "Quantity": x_positions["Quantity"],
-                        "Created_at": x_positions["Created_at"],
-                        "Updated_at": x_positions["Updated_at"],
+                        "symbol_ticker": x_positions["ticker"],
+                        "quantity": x_positions["quantity"],
+                        "created_at": x_positions["created_at"],
+                        "updated_at": x_positions["updated_at"],
                     }
                 )
 
@@ -282,15 +328,15 @@ async def get_users_positions(username: str = Depends(verify_cookie)):
 
 @app.get("/positions/accounts/{account_id}")
 async def get_accounts_positions(
-    account_id: str, username: str = Depends(verify_cookie)
+    account_id: str, user_id: str = Depends(verify_cookie)
 ):
 
     # Get User data
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
     # Confirm it's your account
-    if account_id not in user_data["accounts"]:
+    if account_id not in user_data["accounts_associated"]:
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
@@ -302,11 +348,11 @@ async def get_accounts_positions(
 
     for x in raw_positions.values():
         x_positions = json.loads(x)
-        if x_positions["Account_id"] == account_id:  # If this position is your account
-            positions[x_positions["Ticker"]] = {
-                "Quantity": x_positions["Quantity"],
-                "Created_at": x_positions["Created_at"],
-                "Updated_at": x_positions["Updated_at"],
+        if x_positions["account_id"] == account_id:  # If this position is your account
+            positions[x_positions["symbol_ticker"]] = {
+                "quantity": x_positions["quantity"],
+                "created_at": x_positions["created_at"],
+                "updated_at": x_positions["updated_at"],
             }
 
     return {"message": positions}
@@ -314,16 +360,11 @@ async def get_accounts_positions(
 
 @app.get("/positions/ticker/{ticker}")
 async def get_users_positions_for_ticker(
-    ticker: str, username: str = Depends(verify_cookie)
+    ticker: str, user_id: str = Depends(verify_cookie)
 ):
 
-    # Confirm it's a real ticker
-    raw_ticker = await redis_client.hget(redis_dictionaries[2], ticker)
-    if not raw_ticker:
-        raise HTTPException(status_code=404, detail="This ticker does not exist")
-
     # Get User data
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
     positions = {}
@@ -334,15 +375,15 @@ async def get_users_positions_for_ticker(
     for x in raw_positions.values():
         x_positions = json.loads(x)
         if (
-            x_positions["Account_id"] in user_data["accounts"]
-            and x_positions["Ticker"] == ticker
+            x_positions["account_id"] in user_data["accounts_associated"]
+            and x_positions["symbol_ticker"] == ticker
         ):  # You own this account and it's the right ticker
             positions[x_positions["Account_id"]] = [
                 {
-                    "Ticker": x_positions["Ticker"],
-                    "Quantity": x_positions["Quantity"],
-                    "Created_at": x_positions["Created_at"],
-                    "Updated_at": x_positions["Updated_at"],
+                    "symbol_ticker": x_positions["symbol_ticker"],
+                    "quantity": x_positions["quantity"],
+                    "created_at": x_positions["created_at"],
+                    "updated_at": x_positions["updated_at"],
                 }
             ]
 
@@ -351,20 +392,15 @@ async def get_users_positions_for_ticker(
 
 @app.get("/positions/accounts/{account_id}/ticker/{ticker}")
 async def get_accounts_positions_for_ticker(
-    ticker: str, account_id: str, username: str = Depends(verify_cookie)
+    ticker: str, account_id: str, user_id: str = Depends(verify_cookie)
 ):
 
-    # Check ticker exists
-    raw_ticker = await redis_client.hget(redis_dictionaries[2], ticker)
-    if not raw_ticker:
-        raise HTTPException(status_code=404, detail="This ticker does not exist")
-
     # Grab User data
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
     # Confirm you have access to this account
-    if account_id not in user_data["accounts"]:
+    if account_id not in user_data["accounts_associated"]:
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
@@ -377,9 +413,10 @@ async def get_accounts_positions_for_ticker(
     for x in raw_positions.values():
         x_positions = json.loads(x)
         if (
-            x_positions["Account_id"] == account_id and x_positions["Ticker"] == ticker
+            x_positions["account_id"] == account_id
+            and x_positions["symbol_ticker"] == ticker
         ):  # Correct account and ticker
-            positions[x_positions["Ticker"]] = x_positions["Quantity"]
+            positions[x_positions["symbol_ticker"]] = x_positions["quantity"]
             break  # only one account and one ticker
 
     return {"message": positions}
@@ -404,23 +441,23 @@ class Trade(BaseModel):
 
 
 @app.post("/trade")
-async def create_trade(trade: list[Trade], username: str = Depends(verify_cookie)):
+async def create_trade(trade: list[Trade], user_id: str = Depends(verify_cookie)):
 
     if len(trade) == 0:  # Didn't send any trade data
         raise HTTPException(status_code=422, detail="Invalid Trade Data")
 
     for trade_item in trade:  # Loop through each trade one at a time
         await individual_trade(
-            username, trade_item.model_dump()
+            user_id, trade_item.model_dump()
         )  # Converts from class to dictionary for sorting
 
     return {"status": "success"}
 
 
-async def individual_trade(username: str, trade: dict):
+async def individual_trade(user_id: str, trade: dict):
 
     # Ensure it's a valid user
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     if not raw_user:
         raise HTTPException(status_code=404, detail="This user does not exist")
     user_data = json.loads(raw_user)
@@ -432,21 +469,20 @@ async def individual_trade(username: str, trade: dict):
     account_data = json.loads(raw_account)
 
     # Ensure you are trading for you
-    if trade["user_id"] != user_data["user_id"]:
+    if trade["user_id"] != user_id:
         raise HTTPException(
             status_code=401, detail="This user_id does not match your user_id"
         )
 
     # Confirm you have access to this account
-    if trade["account_id"] not in user_data["accounts"]:
+    if trade["account_id"] not in user_data["accounts_associated"]:
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
 
     # Check ticker exists
-    raw_ticker = await redis_client.hget(redis_dictionaries[2], trade["ticker"])
-    if not raw_ticker:
-        raise HTTPException(status_code=404, detail="This ticker does not exist")
+    if trade["ticker"] not in valid_tickers:
+        raise HTTPException(status_code=422, detail="Ticker does not exist")
 
     # Ensure calid direction
     if trade["direction"] not in ("Buy", "Sell"):
@@ -468,21 +504,22 @@ async def individual_trade(username: str, trade: dict):
 
     for key, x in positions.items():
         if (
-            x["Account_id"] == trade["account_id"] and x["Ticker"] == trade["ticker"]
+            x["account_id"] == trade["account_id"]
+            and x["symbol_ticker"] == trade["ticker"]
         ):  # Correct account and ticker
             position_key = key  # Grab the key of the position to edit
             if (
                 trade["direction"] == "Sell"
-                and x["Quantity"] - trade["quantity"] < 0
+                and x["quantity"] - trade["quantity"] < 0
                 and not account_data["can_short"]
             ):  # Check if trying to short
                 raise HTTPException(
                     status_code=403, detail="You do not have permission to short"
                 )
             new_position = (
-                x["Quantity"] + trade["quantity"]
+                x["quantity"] + trade["quantity"]
                 if trade["direction"] == "Buy"
-                else x["Quantity"] - trade["quantity"]
+                else x["quantity"] - trade["quantity"]
             )  # Save what the new position will be
 
             break  # only one account and one ticker
@@ -493,8 +530,9 @@ async def individual_trade(username: str, trade: dict):
                 status_code=403, detail="You do not have permission to short"
             )
 
+    trade_id = str(uuid.uuid4())
     payload = {
-        "trade_id": str(uuid.uuid4()),
+        "trade_id": trade_id,
         "account_id": trade["account_id"],
         "user_id": trade["user_id"],
         "direction": trade["direction"],  # Must be exact string: 'Buy' or 'Sell'
@@ -519,11 +557,11 @@ async def individual_trade(username: str, trade: dict):
         )
         position_key = str(uuid.uuid4())
         position_data = {
-            "Account_id": trade["account_id"],
-            "Ticker": trade["ticker"],
-            "Quantity": new_position,
-            "Created_at": now,
-            "Updated_at": now,
+            "account_id": trade["account_id"],
+            "symbol_ticker": trade["ticker"],
+            "quantity": new_position,
+            "created_at": now,
+            "updated_at": now,
         }
         await redis_client.hset(  # Set the new position
             redis_dictionaries[3], position_key, json.dumps(position_data)
@@ -536,8 +574,8 @@ async def individual_trade(username: str, trade: dict):
         specific_position = json.loads(raw_specific_position)
 
         # Edit the existing position data
-        specific_position["Quantity"] = new_position
-        specific_position["Updated_at"] = now
+        specific_position["quantity"] = new_position
+        specific_position["updated_at"] = now
         await redis_client.hset(
             redis_dictionaries[3], position_key, json.dumps(specific_position)
         )
@@ -545,29 +583,27 @@ async def individual_trade(username: str, trade: dict):
     # High Efficiency: Save to a single field named "d"
     await redis_client.xadd("trade_stream", {"d": packed_bytes})
 
-    return {"status": "success"}
+    return {"status": f"success, here is your trade_id {trade_id}"}
 
 
 # endregion
+
 
 # Get trade data
 # region
 
 
 @app.get("/trades")
-async def get_all_user_trades(request: Request, username: str = Depends(verify_cookie)):
-
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
-    user_data = json.loads(raw_user)
+async def get_all_user_trades(request: Request, user_id: str = Depends(verify_cookie)):
 
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
-        user_data["user_id"],
+        user_id,
     )
 
     return [dict(row) for row in rows]
@@ -575,10 +611,10 @@ async def get_all_user_trades(request: Request, username: str = Depends(verify_c
 
 @app.get("/trades/account/{account_id}")
 async def get_all_user_trades_for_account(
-    account_id: str, request: Request, username: str = Depends(verify_cookie)
+    account_id: str, request: Request, user_id: str = Depends(verify_cookie)
 ):
 
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
     if account_id not in user_data["accounts"]:
@@ -589,12 +625,12 @@ async def get_all_user_trades_for_account(
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND account_id = $2
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
-        user_data["user_id"],
+        user_id,
         account_id,
     )
 
@@ -603,40 +639,33 @@ async def get_all_user_trades_for_account(
 
 @app.get("/trades/ticker/{ticker}")
 async def get_all_user_trades_for_ticker(
-    ticker: str, request: Request, username: str = Depends(verify_cookie)
+    ticker: str, request: Request, user_id: str = Depends(verify_cookie)
 ):
-
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
-    user_data = json.loads(raw_user)
-
-    raw_ticker = await redis_client.hget(redis_dictionaries[2], ticker)
-    if not raw_ticker:
-        raise HTTPException(status_code=404, detail="This ticker does not exist")
 
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
-            AND ticker = $2
-        ORDER BY trade_time DESC
+            AND symbol_ticker = $2
+        ORDER BY created_at DESC
         """,
-        user_data["user_id"],
+        user_id,
         ticker,
     )
 
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/account/{account_id}/ticker.{ticker}")
+@app.get("/trades/account/{account_id}/ticker/{ticker}")
 async def get_all_user_trades_for_account_for_ticker(
     account_id: str,
     ticker: str,
     request: Request,
-    username: str = Depends(verify_cookie),
+    user_id: str = Depends(verify_cookie),
 ):
 
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
     if account_id not in user_data["accounts"]:
@@ -644,20 +673,16 @@ async def get_all_user_trades_for_account_for_ticker(
             status_code=401, detail="You do not have access to this account"
         )
 
-    raw_ticker = await redis_client.hget(redis_dictionaries[2], ticker)
-    if not raw_ticker:
-        raise HTTPException(status_code=404, detail="This ticker does not exist")
-
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND account_id = $2
-            AND ticker = $3
-        ORDER BY trade_time DESC
+            AND symbol_ticker = $3
+        ORDER BY created_at DESC
         """,
-        user_data["user_id"],
+        user_id,
         account_id,
         ticker,
     )
@@ -667,22 +692,143 @@ async def get_all_user_trades_for_account_for_ticker(
 
 @app.get("/trades/{trade_id}")
 async def get_specific_trade(
-    trade_id: str, request: Request, username: str = Depends(verify_cookie)
+    trade_id: str, request: Request, user_id: str = Depends(verify_cookie)
 ):
-
-    raw_user = await redis_client.hget(redis_dictionaries[0], username)
-    user_data = json.loads(raw_user)
 
     rows = await request.app.state.pg_pool.fetch(
         """
         SELECT *
-        FROM trade
+        FROM trades
         WHERE user_id = $1
             AND trade_id = $2
-        ORDER BY trade_time DESC
+        ORDER BY created_at DESC
         """,
-        user_data["user_id"],
+        user_id,
         trade_id,
+    )
+
+    return [dict(row) for row in rows]
+
+
+@app.get("/trades/time/{time_start}/{time_end}")
+async def get_all_user_trades_for_time(
+    request: Request,
+    time_start: Time,
+    time_end: Time,
+    user_id: str = Depends(verify_cookie),
+):
+
+    rows = await request.app.state.pg_pool.fetch(
+        """
+        SELECT *
+        FROM trades
+        WHERE user_id = $1
+            AND created_at BETWEEN $2 AND $3
+        ORDER BY created_at DESC
+        """,
+        user_id,
+        time_start,
+        time_end,
+    )
+
+    return [dict(row) for row in rows]
+
+
+@app.get("/trades/account/{account_id}/time/{time_start}/{time_end}")
+async def get_all_user_trades_for_account_for_time(
+    account_id: str,
+    request: Request,
+    time_start: Time,
+    time_end: Time,
+    user_id: str = Depends(verify_cookie),
+):
+
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    user_data = json.loads(raw_user)
+
+    if account_id not in user_data["accounts"]:
+        raise HTTPException(
+            status_code=401, detail="You do not have access to this account"
+        )
+
+    rows = await request.app.state.pg_pool.fetch(
+        """
+        SELECT *
+        FROM trades
+        WHERE user_id = $1
+            AND account_id = $2
+            AND created_at BETWEEN $3 AND $4
+        ORDER BY created_at DESC
+        """,
+        user_id,
+        account_id,
+        time_start,
+        time_end,
+    )
+
+    return [dict(row) for row in rows]
+
+
+@app.get("/trades/ticker/{ticker}/time/{time_start}/{time_end}")
+async def get_all_user_trades_for_ticker_for_time(
+    ticker: str,
+    request: Request,
+    time_start: Time,
+    time_end: Time,
+    user_id: str = Depends(verify_cookie),
+):
+
+    rows = await request.app.state.pg_pool.fetch(
+        """
+        SELECT *
+        FROM trades
+        WHERE user_id = $1
+            AND symbol_ticker = $2
+            AND created_at BETWEEN $3 AND $4
+        ORDER BY created_at DESC
+        """,
+        user_id,
+        ticker,
+        time_start,
+        time_end,
+    )
+
+    return [dict(row) for row in rows]
+
+
+@app.get("/trades/account/{account_id}/ticker/{ticker}/time/{time_start}/{time_end}")
+async def get_all_user_trades_for_account_for_ticker_for_time(
+    account_id: str,
+    ticker: str,
+    request: Request,
+    time_start: Time,
+    time_end: Time,
+    user_id: str = Depends(verify_cookie),
+):
+
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    user_data = json.loads(raw_user)
+
+    if account_id not in user_data["accounts"]:
+        raise HTTPException(
+            status_code=401, detail="You do not have access to this account"
+        )
+
+    rows = await request.app.state.pg_pool.fetch(
+        """
+        SELECT *
+        FROM trades
+        WHERE user_id = $1
+            AND account_id = $2
+            AND symbol_ticker = $3
+            AND created_at BETWEEN $4 AND $5
+        ORDER BY created_at DESC
+        """,
+        user_id,
+        account_id,
+        ticker,
+        time_start,
+        time_end,
     )
 
     return [dict(row) for row in rows]

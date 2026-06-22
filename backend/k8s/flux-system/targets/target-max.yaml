@@ -1,0 +1,11 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: dev-repo-max
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/MaxRabz/equity-trading-system
+  ref:
+    branch: main # The branch you are currently working on

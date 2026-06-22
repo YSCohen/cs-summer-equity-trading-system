@@ -1,0 +1,106 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: loki-stack
+  namespace: monitoring
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: loki-stack
+      version: "2.9.11"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana-charts
+      interval: 1h
+  values:
+    grafana:
+      enabled: true
+      adminPassword: "Rust!"
+      dashboards:
+        default:
+          fastapi-metrics:
+            gnetId: 14692
+            revision: 1
+            datasource: Prometheus
+
+      dashboardProviders:
+        dashboardproviders.yaml:
+          apiVersion: 1
+          providers:
+            - name: "sidecarProvider"
+              orgId: 1
+              folder: ""
+              type: file
+              disableDeletion: false
+              allowUiUpdates: true
+              updateIntervalSeconds: 30
+              options:
+                foldersFromFilesStructure: false
+                path: /tmp/dashboards
+            - name: "default"
+              orgId: 1
+              folder: "Imported"
+              type: file
+              disableDeletion: false
+              editable: true
+              options:
+                path: /var/lib/grafana/dashboards/default
+      grafana.ini:
+        dashboards:
+          default_home_dashboard_path: /tmp/dashboards/Custom_Dashboards/custom-dashboard.json
+
+      sidecar:
+        dashboards:
+          enabled: true
+          SCProvider: false
+          label: grafana_dashboard
+          searchNamespace: ALL
+          folder: /tmp/dashboards
+          folderAnnotation: k8s-sidecar-target-directory
+          provider:
+            allowUiUpdates: true
+
+    loki:
+      isDefault: true
+      datasource:
+        uid: "loki-local"
+      persistence:
+        enabled: false
+
+    prometheus:
+      enabled: true
+
+    promtail:
+      enabled: true
+      extraVolumes:
+        - name: external-logs
+          hostPath:
+            path: /var/log/external_host
+      extraVolumeMounts:
+        - name: external-logs
+          mountPath: /var/log/external_host
+          readOnly: true
+      config:
+        clients:
+          - url: http://loki-stack.monitoring.svc.cluster.local:3100/loki/api/v1/push
+        snippets:
+          extraScrapeConfigs: |
+            - job_name: external_host_logs
+              static_configs:
+                - targets:
+                    - localhost
+                  labels:
+                    job: host_logs
+                    app: root_log
+                    __path__: /var/log/external_host/**/*.log
+              pipeline_stages:
+                - regex:
+                    source: filename
+                    expression: "^/var/log/external_host/(?P<app>[^/]+)/.*\\.log$"
+                - regex:
+                    expression: "^\\[.*?\\]\\s+(?P<level>[A-Z]+):"
+                - labels:
+                    app:
+                    level:
