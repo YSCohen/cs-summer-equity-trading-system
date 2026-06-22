@@ -10,21 +10,6 @@ services:
             - "5432:5432"
         volumes:
             - ./init.sql:/docker-entrypoint-initdb.d/init.sql:z
-        # # Start Postgres with verbose logging flags (for debugging)
-        # command:
-        #     - "postgres"
-        #     - "-c"
-        #     - "log_statement=all"
-        #     - "-c"
-        #     - "log_connections=on"
-        #     - "-c"
-        #     - "log_disconnections=on"
-        #     - "-c"
-        #     - "log_error_verbosity=default"
-        #     - "-c"
-        #     - "log_min_messages=info" 
-        #     - "-c"
-        #     - "log_min_error_statement=info"
 
     redis:
         image: redis:8-alpine
