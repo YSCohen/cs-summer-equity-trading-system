@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: fastapi
-          image: ghcr.io/maxrabz/fastapi@sha256:876368786a4c8b4bb5697e9e34659e0d99812110bfc3a2ab25d2506110868ac8
+          image: ghcr.io/maxrabz/fastapi:working
           ports:
             - containerPort: 8000
           resources:

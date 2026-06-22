@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 
 # Highly defensive scripting
-set -euo pipefail
+set -e
+set -u
+case "$SHELL" in
+*bash*) set -o pipefail ;;
+esac
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export HOST_ROOT="$PROJECT_ROOT"
 
-REPO_NAME="dev-repo" # Default
+REPO_NAME="main-repo"
 TARGET_FILE="target-upstream.yaml"
 
-if [[ "${1:-}" == "--max" ]]; then
+if [[ "${1:-}" == "--sean" ]]; then
+    REPO_NAME="dev-repo"
+    TARGET_FILE="target-fork.yaml"
+elif [[ "${1:-}" == "--max" ]]; then
     REPO_NAME="dev-repo-max"
-    TARGET_FILE="target-max.yaml" # Ensure this file exists in targets/
-elif [[ "${1:-}" == "--sm26" ]]; then
-    REPO_NAME="main-repo"
-    TARGET_FILE="target-sm26.yaml"
+    TARGET_FILE="target-max.yaml"
 fi
 
 echo "=========================================================="
@@ -83,7 +87,7 @@ $ENGINE compose down -v >/dev/null 2>&1
 set -e # Re-enable strict mode
 
 echo "📦 Starting the k8s-toolbox..."
-$ENGINE compose up -d
+$ENGINE compose up -d --build
 
 # Give the engine a moment to attach the volume before firing commands
 sleep 2
