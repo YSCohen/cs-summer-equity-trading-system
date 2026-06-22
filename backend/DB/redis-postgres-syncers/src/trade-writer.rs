@@ -6,8 +6,7 @@ use redis::AsyncCommands;
 use redis::streams::{StreamReadOptions, StreamReadReply};
 use serde::Deserialize;
 use std::env;
-use std::error::Error;
-use std::{thread::sleep, time};
+use std::fmt::Write;
 use tokio_postgres::NoTls;
 use tracing::{error, info, warn};
 
@@ -25,69 +24,66 @@ struct TradePayload {
     other_account: Option<String>,
 }
 
-fn error_exit(message: &str) -> ! {
-    error!(message);
-    std::process::exit(1)
-}
-
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() {
     tracing_subscriber::fmt::init();
 
-    // get config from env vars
+    // Run the main pipeline and catch any fatal initialization errors
+    if let Err(err) = run().await {
+        error!(%err, "Fatal application initialization error");
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _ = dotenv();
 
-    let pg_config = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| error_exit("DATABASE_URL environment variable must be set"));
-
-    let redis_url = env::var("REDIS_URL")
-        .unwrap_or_else(|_| error_exit("REDIS_URL environment variable must be set"));
-
-    let stream_name = env::var("REDIS_STREAM_NAME")
-        .unwrap_or_else(|_| error_exit("REDIS_STREAM_NAME environment variable must be set"));
-
-    let consumer_group = env::var("REDIS_CONSUMER_GROUP")
-        .unwrap_or_else(|_| error_exit("REDIS_CONSUMER_GROUP environment variable must be set"));
-
-    let worker_name = env::var("WORKER_NAME")
-        .unwrap_or_else(|_| error_exit("WORKER_NAME environment variable must be set"));
+    let pg_config = env::var("DATABASE_URL").map_err(|_| "DATABASE_URL must be set")?;
+    let redis_url = env::var("REDIS_URL").map_err(|_| "REDIS_URL must be set")?;
+    let stream_name = env::var("REDIS_STREAM_NAME").map_err(|_| "REDIS_STREAM_NAME must be set")?;
+    let consumer_group =
+        env::var("REDIS_CONSUMER_GROUP").map_err(|_| "REDIS_CONSUMER_GROUP must be set")?;
+    let worker_name = env::var("WORKER_NAME").map_err(|_| "WORKER_NAME must be set")?;
 
     info!("read env vars");
 
-    let dur = time::Duration::from_secs(5);
-    sleep(dur);
+    // wait for DB servers to come up
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
-    // connect to postgres
+    // Connect to postgres
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
     tokio::spawn(async move {
         if let Err(e) = connection.await {
             error!("PostgreSQL connection driver error: {}", e);
         }
     });
-
     info!("connected to postgres");
 
-    // connect to redis
+    // Connect to redis
     let redis_client = redis::Client::open(redis_url)?;
     let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
-
     info!("connected to redis");
 
-    // Create Redis Consumer Group dynamically and ensure the stream exists
+    // Create Redis Consumer Group dynamically
     let group_create_result: Result<(), redis::RedisError> = redis_conn
         .xgroup_create_mkstream(&stream_name, &consumer_group, "0")
         .await;
 
-    match group_create_result {
-        Ok(_) => info!("Consumer group '{}' verified/created", consumer_group),
-        Err(e) => {
-            // If the group already exists (BUSYGROUP), we can safely ignore the error on restart.
-            if !e.to_string().contains("BUSYGROUP") {
-                error!("Initializing consumer group failed: {}", e);
-            }
+    if let Err(e) = group_create_result {
+        if !e.to_string().contains("BUSYGROUP") {
+            error!("Initializing consumer group failed: {}", e);
+        } else {
+            info!("Consumer group '{}' already exists", consumer_group);
         }
     }
+
     info!("Pipeline engaged for stream '{}'", stream_name);
+
+    // start by processing pending messages ("0"), switch to new messages (">") later
+    let mut stream_id = "0".to_string();
+
+    // buffer to hold bulk COPY data. Pre-allocating ~500KB to avoid reallocations
+    let mut copy_payload_buffer = String::with_capacity(512_000);
 
     loop {
         // Fetch batches from the configured redis stream
@@ -97,7 +93,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .block(100);
 
         let reply: StreamReadReply = match redis_conn
-            .xread_options(&[&stream_name], &[">"], &opts)
+            .xread_options(&[&stream_name], &[&stream_id], &opts)
             .await
         {
             Ok(r) => r,
@@ -108,108 +104,106 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         };
 
+        // If reading pending entries ("0") returns empty, switch to new entries (">")
+        if reply.keys.is_empty() || reply.keys[0].ids.is_empty() {
+            if stream_id == "0" {
+                info!("Finished processing pending entries, switching to new messages.");
+                stream_id = ">".to_string();
+            }
+            continue;
+        }
+
         let mut msg_ids = Vec::new();
-        let mut copy_rows = Vec::new();
+        copy_payload_buffer.clear(); // Clear the buffer for the new batch
 
         for stream_key in reply.keys {
             for record in stream_key.ids {
                 msg_ids.push(record.id.clone());
 
-                // Extract binary payload from the single field "d"
                 let Some(redis::Value::BulkString(bytes)) = record.map.get("d") else {
-                    warn!(
-                        "Redis message {} missing expected binary field 'd': {:?}",
-                        record.id, record.map
-                    );
-                    continue;
+                    warn!("Redis message {} missing binary field 'd'", record.id);
+                    continue; // Skip malformed record
                 };
 
                 let trade: TradePayload = match rmp_serde::from_slice(bytes) {
-                    Ok(trade) => trade,
+                    Ok(t) => t,
                     Err(e) => {
-                        warn!(
-                            "Failed to decode MessagePack payload for Redis message {}: {}",
-                            record.id, e
-                        );
-                        continue;
+                        warn!("Failed to decode payload for {}: {}", record.id, e);
+                        continue; // Skip badly serialized record
                     }
                 };
 
-                {
-                    // format dates for postgres text input
-                    let created = jiff::Timestamp::from_second(trade.created_at)
-                        .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
-                        .unwrap_or_else(|_| "\\N".to_string());
+                let created = jiff::Timestamp::from_second(trade.created_at)
+                    .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
+                    .unwrap_or_else(|_| "\\N".to_string());
 
-                    let updated = jiff::Timestamp::from_second(trade.updated_at)
-                        .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
-                        .unwrap_or_else(|_| "\\N".to_string());
+                let updated = jiff::Timestamp::from_second(trade.updated_at)
+                    .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
+                    .unwrap_or_else(|_| "\\N".to_string());
 
-                    let other_acc = trade.other_account.unwrap_or_else(|| "\\N".to_string());
+                let other_acc = trade.other_account.as_deref().unwrap_or("\\N");
 
-                    // Generate a standard Tab-Separated line format for standard COPY protocol
-                    let row = format!(
-                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
-                        trade.trade_id,
-                        trade.account_id,
-                        trade.user_id,
-                        trade.direction, // Maps to Postgres ENUM directly via text
-                        trade.symbol_ticker,
-                        created,
-                        updated,
-                        trade.quantity,
-                        trade.price,
-                        other_acc
-                    );
-                    copy_rows.push(bytes::Bytes::from(row));
-                }
+                // OPTIMIZATION: Write directly into the single pre-allocated String buffer
+                let _ = writeln!(
+                    &mut copy_payload_buffer,
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    trade.trade_id,
+                    trade.account_id,
+                    trade.user_id,
+                    trade.direction,
+                    trade.symbol_ticker,
+                    created,
+                    updated,
+                    trade.quantity,
+                    trade.price,
+                    other_acc
+                );
             }
         }
 
-        // If no records were processed, loop back and block again
-        if msg_ids.is_empty() {
-            continue;
-        }
-
-        if copy_rows.is_empty() {
+        // If we parsed 0 valid rows but have msg_ids, we must ACK them so they don't get stuck.
+        if copy_payload_buffer.is_empty() {
             warn!(
-                "Read {} Redis message(s) but decoded no trade rows",
+                "Decoded no valid rows, ACKing {} bad messages to discard them.",
                 msg_ids.len()
             );
+            let _: Result<(), _> = redis_conn
+                .xack(&stream_name, &consumer_group, &msg_ids)
+                .await;
             continue;
         }
 
-        // postgres bulk COPY operation
         let copy_query = "COPY trades (trade_id, account_id, user_id, direction, symbol_ticker, created_at, updated_at, quantity, price, other_account) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')";
 
         match pg_client.copy_in(copy_query).await {
             Ok(sink) => {
                 tokio::pin!(sink);
 
-                // Stream each row into the COPY sink
-                for row in copy_rows {
-                    if let Err(e) = sink.send(row).await {
-                        warn!("Streaming row via COPY failed: {}", e);
-                        continue;
-                    }
-                }
+                // Send the entire batch over the network in one chunk
+                let chunk = bytes::Bytes::from(copy_payload_buffer.clone());
 
-                if let Err(e) = sink.close().await {
-                    warn!("Finalizing COPY transaction failed: {}", e);
+                // If sending/closing fails, abort transaction and DO NOT ACK
+                if let Err(e) = sink.send(chunk).await {
+                    error!("Streaming COPY failed (transaction aborted): {}", e);
                     continue;
                 }
 
-                // Acknowledge messages in redis only after postgres write
-                // confirmation so if postgres was down and this failed, redis
-                // will keep these messages for the next attempt
-                let _: Result<(), _> = redis_conn
-                    .xack(&stream_name, &consumer_group, &msg_ids)
-                    .await;
+                if let Err(e) = sink.close().await {
+                    error!("Finalizing COPY failed (transaction aborted): {}", e);
+                    continue;
+                }
 
-                info!("Successfully copied {} rows to trades table", msg_ids.len());
+                // Acknowledge messages in Redis ONLY after Postgres confirms write
+                match redis_conn
+                    .xack(&stream_name, &consumer_group, &msg_ids)
+                    .await
+                {
+                    Ok(()) => info!("Successfully copied and ACK'd {} rows", msg_ids.len()),
+                    Err(e) => error!("Failed to ACK messages in Redis: {}", e),
+                }
             }
             Err(e) => {
-                warn!("Failed to initialize Postgres COPY stream context: {}", e);
+                error!("Failed to initialize Postgres COPY context: {}", e);
             }
         }
     }
