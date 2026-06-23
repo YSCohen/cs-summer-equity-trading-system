@@ -27,6 +27,7 @@ struct TradePayload {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+    info!("STARTING TRADE WRITER");
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {

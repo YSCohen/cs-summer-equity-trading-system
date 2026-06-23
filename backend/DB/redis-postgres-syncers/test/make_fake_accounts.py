@@ -60,6 +60,7 @@ async def individual_account(account_name: str):
     }
 
     await redis_client.hset("accounts", account_id, json.dumps(account_data))
+    print(f"[NEW USER] {account_name}  -  {account_id}")
 
 
 async def make_fake_accounts():
