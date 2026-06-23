@@ -7,12 +7,12 @@ use std::env;
 use std::error::Error;
 use std::fmt::Write;
 use tokio_postgres::NoTls;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
-    info!("STARTING DB SYNCER");
+    info!("=== STARTING DB SYNCER ===");
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
@@ -27,7 +27,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let pg_config = env::var("POSTGRES_CONFIG").map_err(|_| "POSTGRES_CONFIG must be set")?;
     let redis_url = env::var("REDIS_URL").map_err(|_| "REDIS_URL must be set")?;
 
-    info!("read env vars");
+    debug!("read env vars");
 
     // Connect to postgres
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
@@ -36,12 +36,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             error!("PostgreSQL connection driver error: {}", e);
         }
     });
-    info!("connected to postgres");
+    debug!("connected to postgres");
 
     // Connect to redis
     let redis_client = redis::Client::open(redis_url)?;
     let redis_conn = redis_client.get_multiplexed_async_connection().await?;
-    info!("connected to redis");
+    debug!("connected to redis");
 
     sync_accounts(pg_client, redis_conn).await?;
 
@@ -61,26 +61,28 @@ async fn sync_accounts(
     pg_client: tokio_postgres::Client,
     mut redis_conn: redis::aio::MultiplexedConnection,
 ) -> Result<(), Box<dyn Error + 'static>> {
-    info!("Starting account sync...");
+    debug!("Starting account sync...");
 
     let accounts: std::collections::HashMap<String, String> = redis::cmd("HGETALL")
         .arg("accounts")
         .query_async(&mut redis_conn)
         .await?;
-    info!(
-        "Found {} accounts in Redis. Starting migration...",
-        accounts.len()
-    );
 
     if accounts.is_empty() {
         info!("No accounts found in Redis. Nothing to sync.");
         return Ok(());
+    } else {
+        info!(
+            "Found {} accounts in Redis. Starting migration...",
+            accounts.len()
+        );
     }
 
     pg_client
         .batch_execute("TRUNCATE TABLE accounts_sync_stage;")
         .await?;
-    info!("cleared staging table");
+
+    debug!("cleared staging table");
 
     let mut copy_payload_buffer = String::with_capacity(accounts.len().saturating_mul(160));
     let mut skipped = 0;
@@ -112,7 +114,7 @@ async fn sync_accounts(
         );
     }
 
-    info!("created copy payload buffer");
+    debug!("created copy payload buffer");
 
     if copy_payload_buffer.is_empty() {
         info!(
@@ -132,7 +134,7 @@ async fn sync_accounts(
             sink.send(chunk).await?;
             sink.close().await?;
 
-            info!("copied accounts into staging table");
+            info!("wrote accounts into staging table");
 
             let upserted = pg_client.execute(
                     "INSERT INTO accounts (account_id, account_name, positions, can_short, created_at, updated_at)
@@ -150,7 +152,8 @@ async fn sync_accounts(
             if skipped > 0 {
                 warn!("skipped {} malformed account payloads from Redis", skipped);
             }
-            info!("upserted {} accounts to postgres", upserted);
+
+            info!("upserted {} accounts to accounts table", upserted);
         }
         Err(e) => {
             error!("Failed to initialize Postgres COPY context: {}", e);
