@@ -13,7 +13,6 @@ import asyncio
 # import itertools
 import os
 import random
-import string
 import time
 import uuid
 
@@ -27,9 +26,34 @@ import redis.asyncio as aioredis
 # # 17_576 combinations
 # TICKERS = ["".join(c) for c in itertools.product(string.ascii_uppercase, repeat=3)]
 
-# AAA, BBB, ..., YYY, ZZZ
-# 26 combinations
-TICKERS = [c * 3 for c in string.ascii_uppercase]
+TICKERS = [
+    "AAA",
+    "BBB",
+    "CCC",
+    "DDD",
+    "EEE",
+    "FFF",
+    "GGG",
+    "HHH",
+    "III",
+    "JJJ",
+    "KKK",
+    "LLL",
+    "MMM",
+    "NNN",
+    "OOO",
+    "PPP",
+    "QQQ",
+    "RRR",
+    "SSS",
+    "TTT",
+    "UUU",
+    "VVV",
+    "WWW",
+    "XXX",
+    "YYY",
+    "ZZZ",
+]
 
 redis_client = aioredis.Redis(host=os.getenv("REDIS_HOST", "localhost"))
 
@@ -77,8 +101,6 @@ async def generate_fake_trades():
 
             print(f"[SENT] {direction} {quantity} {symbol} @ {price}")
 
-    except asyncio.CancelledError:
-        print("\nStopping the generator safely...")
     finally:
         # Gracefully close the Redis connection pool
         await redis_client.aclose()
