@@ -222,7 +222,7 @@ async def register_user(request: RegisterRequest, response: Response):
         max_age=day_in_sec,
     )
 
-    return {"message": f"User registered successfully, your user_id is {user_id}"}
+    return {"message": "User registered successfully", "user_id": f"{user_id}"}
 
 
 @app.post("/login")
@@ -329,7 +329,7 @@ async def create_account(
 
     await redis_client.hset(redis_dictionaries[0], user_id, json.dumps(user_data))
 
-    return {"message": f"Account created, here is you account_id {account_id}"}
+    return {"message": "Account created", "account_id": f"{account_id}"}
 
 
 @app.post("/users/accounts/{account_id}")
@@ -397,7 +397,9 @@ async def get_users_positions(user_id: str = Depends(verify_cookie)):
         if (
             x_positions["account_id"] in user_data["accounts_associated"]
         ):  # This positions is your account
-            raw_account = await redis_client.hget(redis_dictionaries[1], x_positions["account_id"])
+            raw_account = await redis_client.hget(
+                redis_dictionaries[1], x_positions["account_id"]
+            )
             real_account = json.loads(raw_account)
             if (
                 x_positions["account_id"] not in positions
@@ -480,7 +482,9 @@ async def get_users_positions_for_ticker(
             x_positions["account_id"] in user_data["accounts_associated"]
             and x_positions["symbol_ticker"] == ticker
         ):  # You own this account and it's the right ticker
-            raw_account = await redis_client.hget(redis_dictionaries[1], x_positions["account_id"])
+            raw_account = await redis_client.hget(
+                redis_dictionaries[1], x_positions["account_id"]
+            )
             real_account = json.loads(raw_account)
             positions[x_positions["account_id"]] = [
                 {
@@ -705,7 +709,7 @@ async def individual_trade(user_id: str, trade: dict):
     duration_ms = (time.perf_counter() - start) * 1000
     logger.info(f"Succesfully booked a trade. Completed in {duration_ms:2f}ms")
 
-    return {"status": f"success, here is your trade_id {trade_id}"}
+    return {"status": "success", "trade_id": f"{trade_id}"}
 
 
 # endregion
