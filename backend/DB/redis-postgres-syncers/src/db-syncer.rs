@@ -4,7 +4,7 @@ use dotenvy::dotenv;
 use std::env;
 use std::error::Error;
 use tokio_postgres::NoTls;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 #[tokio::main]
 async fn main() {
@@ -23,7 +23,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let pg_config = env::var("POSTGRES_CONFIG").map_err(|_| "POSTGRES_CONFIG must be set")?;
     let redis_url = env::var("REDIS_URL").map_err(|_| "REDIS_URL must be set")?;
 
-    debug!("read env vars");
+    info!("read env vars");
 
     // Connect to postgres
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
@@ -63,7 +63,7 @@ async fn sync_accounts(
         .arg("accounts")
         .query_async(&mut redis_conn)
         .await?;
-    debug!(
+    info!(
         "Found {} accounts in Redis. Starting migration...",
         accounts.len()
     );
@@ -77,7 +77,7 @@ async fn sync_accounts(
             can_short = EXCLUDED.can_short,
             updated_at = EXCLUDED.updated_at"
     ).await?;
-    debug!("prepared sql statement in postgres");
+    info!("prepared sql statement in postgres");
 
     for (id_str, json_str) in accounts {
         // Deserialize the JSON Value

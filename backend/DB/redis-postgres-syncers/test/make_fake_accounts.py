@@ -6,8 +6,6 @@
 # ]
 # ///
 
-# for testing the trade writer. send A LOT of trades to redis
-
 import asyncio
 import json
 import random
