@@ -9,12 +9,21 @@ services:
     stdin_open: true
     privileged: true
     user: root
+    security_opt:
+      - label:disable
+
+    # 1. NEW: Tell the toolbox where the socket ACTUALLY lives
+    environment:
+      - DOCKER_HOST=unix://${DOCKER_HOST_PATH:-/var/run/docker.sock}
+
     networks:
       - k3d-network
+
     volumes:
-      - ${DOCKER_HOST_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+      # 2. FIXED: Map the socket to the EXACT SAME path inside the container as the host
+      - ${DOCKER_HOST_PATH:-/var/run/docker.sock}:${DOCKER_HOST_PATH:-/var/run/docker.sock}:z
       - ../../:/workspace:z
-      - ${HOST_ROOT}:${HOST_ROOT}
+      - ${HOST_ROOT}:${HOST_ROOT}:z
 networks:
   k3d-network:
     name: k3d-network

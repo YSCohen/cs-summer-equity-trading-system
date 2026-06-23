@@ -351,11 +351,13 @@ else:
        st.header("📊 All Positions")
        st.caption("GET /positions")
 
-
        if st.button("Load Positions"):
            result = get_all_positions()
            if result["status"] == "success":
-               st.json(result["data"])
+               if result["data"]:
+                   st.json(result["data"])
+               else:
+                   st.info("No positions yet. Book a trade to see positions here.")
            else:
                st.error(result["message"])
 
@@ -516,13 +518,9 @@ else:
                display_name = result.get("name") or name or "(unnamed account)"
                if account_id:
                    st.success(f"Account **{display_name}** created — ID: `{account_id}`")
-                   st.session_state.pop("accounts_cache", None)  # refresh My Accounts
                else:
                    st.success("Account created.")
-                   st.warning(
-                       "The backend didn't return the new account's ID. "
-                       "Check 'My Accounts' to find it."
-                   )
+               st.session_state.pop("accounts_cache", None)
            else:
                st.error(result["message"])
 

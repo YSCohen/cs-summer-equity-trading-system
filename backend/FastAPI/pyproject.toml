@@ -14,4 +14,5 @@ dependencies = [
     "msgpack>=1.2.1",
     "passlib[bcrypt]>=1.7.4",
     "argon2-cffi>=25.1.0",
+    "logbook>=1.9.2",
 ]
