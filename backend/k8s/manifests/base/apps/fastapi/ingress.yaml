@@ -6,7 +6,8 @@ metadata:
   namespace: backend
 spec:
   rules:
-    - http:
+    - host: api.localhost
+      http:
         paths:
           - path: /
             pathType: Prefix

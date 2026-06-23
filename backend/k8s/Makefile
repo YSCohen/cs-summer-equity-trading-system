@@ -1,6 +1,6 @@
 .PHONY: toolbox-up toolbox-down cluster-up cluster-up-sean cluster-up-max \
         cluster-down shell run kubectl rebuild status status-wide status-svc \
-        sync reload-grafana \
+        sync chaos-grafana \
         chaos-api chaos-streamlit chaos-worker chaos-redis chaos-node-stop chaos-node-start \
         shell-api shell-ui shell-worker shell-postgres psql redis-cli \
 	seed-trades
@@ -78,12 +78,12 @@ status-svc:
 sync:
 	$(DOCKER) exec -it k8s-toolbox flux reconcile kustomization dev-stack --with-source
 
-reload-grafana:
-	@$(DOCKER) exec -it k8s-toolbox kubectl delete pod -l app.kubernetes.io/name=grafana -n monitoring
-
 # ==========================================
 # 🌪️ CHAOS ENGINEERING
 # ==========================================
+
+chaos-grafana:
+	@$(DOCKER) exec -it k8s-toolbox kubectl delete pod -l app.kubernetes.io/name=grafana -n monitoring
 
 chaos-api:
 	@echo "🔫 Terminating all FastAPI pods..."

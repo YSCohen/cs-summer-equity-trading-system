@@ -1,0 +1,49 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: error-page
+  namespace: frontend
+  labels:
+    app: error-page
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: error-page
+  template:
+    metadata:
+      labels:
+        app: error-page
+    spec:
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:alpine
+          ports:
+            - containerPort: 8080
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 101
+          volumeMounts:
+            - name: html-volume
+              mountPath: /usr/share/nginx/html
+            # Add these three mounts to allow Nginx to write its startup files
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: run-volume
+              mountPath: /var/run
+            - name: cache-volume
+              mountPath: /var/cache/nginx
+      volumes:
+        - name: html-volume
+          configMap:
+            name: error-page-content
+        # Map those mounts to empty, transient directories
+        - name: tmp-volume
+          emptyDir: {}
+        - name: run-volume
+          emptyDir: {}
+        - name: cache-volume
+          emptyDir: {}

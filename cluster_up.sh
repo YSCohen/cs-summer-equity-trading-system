@@ -122,8 +122,12 @@ $ENGINE compose up -d --build
 sleep 2
 
 echo "🚀 Creating cluster (bootstrapping Flux controllers)..."
+
+# Use --no-host-dns to stop K3d from touching /etc/resolv.conf
 $ENGINE exec -e HOST_ROOT="$PROJECT_ROOT" -i k8s-toolbox \
-    k3d cluster create --config backend/k8s/k3d-config.yaml
+    k3d cluster create --config backend/k8s/k3d-config.yaml \
+    --k3s-arg "--resolv-conf=/tmp/custom-resolv.conf@server:*" \
+    --k3s-arg "--resolv-conf=/tmp/custom-resolv.conf@agent:*"
 
 # ============================================================
 # Wait for API server — check the API endpoint directly,
@@ -171,7 +175,7 @@ echo ""
 echo "📈 ======================================================= 📈"
 echo "               BULL MARKET ENGAGED: SYSTEM LIVE              "
 echo " --------------------------------------------------------- "
-echo " 🟢 API Gateway       -> http://localhost:8080"
+echo " 🟢 API Gateway       -> http://api.localhost:8080"
 echo " 📊 Streamlit UI      -> http://streamlit.localhost:8080"
 echo " 🦗 Locust Load Test  -> http://locust.localhost:8080"
 echo " 🔭 Grafana Metrics   -> http://grafana.localhost:8080"

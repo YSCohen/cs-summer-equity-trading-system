@@ -19,3 +19,4 @@ resources:
   - apps/locust
   - apps/streamlit
   - apps/trade-writer
+  - apps/error-pages

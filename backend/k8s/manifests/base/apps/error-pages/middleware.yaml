@@ -1,0 +1,15 @@
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: streamlit-fallback
+  namespace: frontend
+spec:
+  errors:
+    status:
+      - "404"
+      - "500-503"
+    service:
+      name: error-page
+      port: 80
+    query: "/"
