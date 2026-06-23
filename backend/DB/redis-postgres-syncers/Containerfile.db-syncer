@@ -1,0 +1,21 @@
+# --- Stage 1: Build ---
+FROM rust:latest AS builder
+WORKDIR /app
+
+# build deps in separate layer
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {unimplemented!()}" > src/db-syncer.rs
+RUN cargo build --release --bin db-syncer
+RUN rm -f target/release/deps/db_syncer* target/release/db-syncer*
+
+COPY ./src ./src
+RUN cargo build --release --bin db-syncer
+
+# --- Stage 2: Lightweight Runtime Container ---
+FROM debian:bookworm-slim
+WORKDIR /app
+
+# Copy compiled binary
+COPY --from=builder /app/target/release/db-syncer /app/db-syncer
+
+CMD ["./db-syncer"]

@@ -8,7 +8,7 @@ use serde::Deserialize;
 use std::env;
 use std::fmt::Write;
 use tokio_postgres::NoTls;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[derive(Deserialize)]
 struct TradePayload {
@@ -27,6 +27,7 @@ struct TradePayload {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+    info!("=== STARTING TRADE WRITER ===");
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
@@ -45,7 +46,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         env::var("REDIS_CONSUMER_GROUP").map_err(|_| "REDIS_CONSUMER_GROUP must be set")?;
     let worker_name = env::var("WORKER_NAME").map_err(|_| "WORKER_NAME must be set")?;
 
-    info!("read env vars");
+    debug!("read env vars");
 
     // wait for DB servers to come up
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
@@ -57,12 +58,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             error!("PostgreSQL connection driver error: {}", e);
         }
     });
-    info!("connected to postgres");
+    debug!("connected to postgres");
 
     // Connect to redis
     let redis_client = redis::Client::open(redis_url)?;
     let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
-    info!("connected to redis");
+    debug!("connected to redis");
 
     // Create Redis Consumer Group dynamically
     let group_create_result: Result<(), redis::RedisError> = redis_conn
@@ -73,7 +74,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         if !e.to_string().contains("BUSYGROUP") {
             error!("Initializing consumer group failed: {}", e);
         } else {
-            info!("Consumer group '{}' already exists", consumer_group);
+            debug!("Consumer group '{}' already exists", consumer_group);
         }
     }
 
@@ -151,7 +152,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
                     .unwrap_or_else(|_| "\\N".to_string());
 
-                let other_acc = trade.other_account.as_deref().unwrap_or("\\N");
+                let other_acc = trade
+                    .other_account
+                    .as_deref()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("\\N");
 
                 // OPTIMIZATION: Write directly into the single pre-allocated String buffer
                 let _ = writeln!(
@@ -194,12 +199,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 // If sending/closing fails, abort transaction and DO NOT ACK
                 if let Err(e) = sink.send(chunk).await {
-                    error!("Streaming COPY failed (transaction aborted): {}", e);
+                    log_postgres_error("Streaming COPY failed (transaction aborted)", &e);
                     continue;
                 }
 
                 if let Err(e) = sink.close().await {
-                    error!("Finalizing COPY failed (transaction aborted): {}", e);
+                    log_postgres_error("Finalizing COPY failed (transaction aborted)", &e);
                     continue;
                 }
 
@@ -236,5 +241,13 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
+    }
+}
+
+fn log_postgres_error(context: &str, err: &tokio_postgres::Error) {
+    if let Some(db_error) = err.as_db_error() {
+        error!("{}: {}", context, db_error);
+    } else {
+        error!("{}: {}", context, err);
     }
 }
