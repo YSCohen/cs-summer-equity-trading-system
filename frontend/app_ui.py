@@ -2,6 +2,7 @@ import streamlit as st
 
 from api_client import logout
 from theme import apply_theme
+from persistent_login import forget_login
 from auth_pages import render_auth_sidebar, render_login_page, render_register_page
 from accounts_pages import (
     render_my_accounts_page,
@@ -23,6 +24,7 @@ from trade_history_pages import (
     render_update_trade_page,
 )
 from enter_trade_page import render_enter_trade_page
+from persistent_login import restore_login_from_browser
 
 
 st.set_page_config(page_title="Equity Trading System", page_icon="📈", layout="wide")
@@ -35,6 +37,7 @@ if "username" not in st.session_state:
 # if "username" not in st.session_state:
 #     st.session_state.username = "dev_bypass"  # TODO: remove this before going live, allows to see the main page without logging in
 
+restore_login_from_browser()
 
 st.title("📈 Equity Trading System")
 
@@ -53,6 +56,7 @@ else:
 
     if st.sidebar.button("🚪 Log Out"):
         logout()
+        forget_login()
         st.session_state.username = None
         st.rerun()
 
@@ -73,16 +77,30 @@ else:
         "✏️ Edit Trade": "Update Trade",
     }
 
-    st.sidebar.markdown("**Navigate**")
-    selected_label = st.sidebar.radio(
-        "Page", list(page_options.keys()), label_visibility="collapsed"
-    )
-    page = page_options[selected_label]
+    # Reverse lookup so we can force the sidebar radio to the right label
+    # when another page (e.g. My Accounts) redirects us here.
+    label_for_page = {v: k for k, v in page_options.items()}
 
     # Lets other pages send the user to "Positions by Account" with a
     # specific account already filled in, e.g. from a My Accounts link.
     if "jump_to_account" in st.session_state:
-        page = "Positions by Account"
+        st.session_state.nav_radio = label_for_page["Positions by Account"]
+
+    # Lets My Accounts send the user straight to Book a Trade with the
+    # account ID already filled in.
+    if st.session_state.pop("jump_to_trade_page", False):
+        st.session_state.nav_radio = label_for_page["Enter Trade"]
+
+    # Lets the empty My Accounts state send the user straight to
+    # Create Account.
+    if st.session_state.pop("jump_to_create_account_page", False):
+        st.session_state.nav_radio = label_for_page["Create Account"]
+
+    st.sidebar.markdown("**Navigate**")
+    selected_label = st.sidebar.radio(
+        "Page", list(page_options.keys()), label_visibility="collapsed", key="nav_radio"
+    )
+    page = page_options[selected_label]
 
     PAGE_RENDERERS = {
         "Enter Trade": render_enter_trade_page,

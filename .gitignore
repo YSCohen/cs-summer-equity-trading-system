@@ -1,6 +1,8 @@
 __pycache__
 .venv
 .ruff_cache
+.DS_Store
+.idea/
 
 /logs/*/*
 !/logs/*/

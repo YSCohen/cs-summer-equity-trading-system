@@ -5,11 +5,11 @@ WORKDIR /app
 # build deps in separate layer
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {unimplemented!()}" > src/trade-writer.rs
-RUN cargo build --release
+RUN cargo build --release --bin trade-writer
 RUN rm -f target/release/deps/trade_writer* target/release/trade-writer*
 
 COPY ./src ./src
-RUN cargo build --release
+RUN cargo build --release --bin trade-writer
 
 # --- Stage 2: Lightweight Runtime Container ---
 FROM debian:bookworm-slim

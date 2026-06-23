@@ -16,7 +16,6 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from prometheus_fastapi_instrumentator import Instrumentator
 import logbook
-from pathlib import Path
 
 valid_tickers = set()
 
@@ -73,6 +72,7 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 redis_port_number = int(os.getenv("REDIS_PORT", "6379"))
 redis_host = os.getenv("REDIS_HOST", "localhost")
+TRADE_STREAM = os.getenv("TRADE_STREAM")
 redis_dictionaries = [
     "users",
     "accounts",
@@ -222,9 +222,7 @@ async def register_user(request: RegisterRequest, response: Response):
         max_age=day_in_sec,
     )
 
-    return {
-        "message": f"User registered successfully, your user_id is {user_id}. Save it somewhere safe."
-    }
+    return {"message": "User registered successfully", "user_id": f"{user_id}"}
 
 
 @app.post("/login")
@@ -331,9 +329,7 @@ async def create_account(
 
     await redis_client.hset(redis_dictionaries[0], user_id, json.dumps(user_data))
 
-    return {
-        "message": f"Account created, here is you account_id {account_id}. Save it somewhere safe"
-    }
+    return {"message": "Account created", "account_id": f"{account_id}"}
 
 
 @app.post("/users/accounts/{account_id}")
@@ -401,11 +397,16 @@ async def get_users_positions(user_id: str = Depends(verify_cookie)):
         if (
             x_positions["account_id"] in user_data["accounts_associated"]
         ):  # This positions is your account
+            raw_account = await redis_client.hget(
+                redis_dictionaries[1], x_positions["account_id"]
+            )
+            real_account = json.loads(raw_account)
             if (
                 x_positions["account_id"] not in positions
             ):  # First time adding a position for that account
                 positions[x_positions["account_id"]] = [
                     {
+                        "account_name": real_account["account_name"],
                         "symbol_ticker": x_positions["symbol_ticker"],
                         "quantity": x_positions["quantity"],
                         "created_at": x_positions["created_at"],
@@ -415,6 +416,7 @@ async def get_users_positions(user_id: str = Depends(verify_cookie)):
             else:  # This account already processed at least one position
                 positions[x_positions["account_id"]].append(
                     {
+                        "account_name": real_account["account_name"],
                         "symbol_ticker": x_positions["ticker"],
                         "quantity": x_positions["quantity"],
                         "created_at": x_positions["created_at"],
@@ -480,8 +482,13 @@ async def get_users_positions_for_ticker(
             x_positions["account_id"] in user_data["accounts_associated"]
             and x_positions["symbol_ticker"] == ticker
         ):  # You own this account and it's the right ticker
+            raw_account = await redis_client.hget(
+                redis_dictionaries[1], x_positions["account_id"]
+            )
+            real_account = json.loads(raw_account)
             positions[x_positions["account_id"]] = [
                 {
+                    "account_name": real_account["account_name"],
                     "symbol_ticker": x_positions["symbol_ticker"],
                     "quantity": x_positions["quantity"],
                     "created_at": x_positions["created_at"],
@@ -535,7 +542,6 @@ async def get_accounts_positions_for_ticker(
 # Create Trade class so can verify the data in json not query and to ensure all fields are filled out
 class Trade(BaseModel):
     account_id: str
-    user_id: str
     direction: str
     ticker: str
     quantity: int
@@ -551,12 +557,14 @@ async def create_trade(trade: list[Trade], user_id: str = Depends(verify_cookie)
         logger.warning("There was no trade data")
         raise HTTPException(status_code=422, detail="Invalid Trade Data")
 
+    trade_return = []
+
     for trade_item in trade:  # Loop through each trade one at a time
-        await individual_trade(
-            user_id, trade_item.model_dump()
+        trade_return.append(
+            await individual_trade(user_id, trade_item.model_dump())
         )  # Converts from class to dictionary for sorting
 
-    return {"status": "success"}
+    return {"message": trade_return}
 
 
 async def individual_trade(user_id: str, trade: dict):
@@ -565,9 +573,6 @@ async def individual_trade(user_id: str, trade: dict):
 
     # Ensure it's a valid user
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
-    if not raw_user:
-        logger.warning("Invalid user_id for booking")
-        raise HTTPException(status_code=404, detail="This user does not exist")
     user_data = json.loads(raw_user)
 
     # Ensure it's a valid account
@@ -576,13 +581,6 @@ async def individual_trade(user_id: str, trade: dict):
         logger.warning("Invalid account_id for booking")
         raise HTTPException(status_code=404, detail="This account does not exist")
     account_data = json.loads(raw_account)
-
-    # Ensure you are trading for you
-    if trade["user_id"] != user_id:
-        logger.warning("Invalid user_id for booking")
-        raise HTTPException(
-            status_code=401, detail="This user_id does not match your user_id"
-        )
 
     # Confirm you have access to this account
     if trade["account_id"] not in user_data["accounts_associated"]:
@@ -646,19 +644,30 @@ async def individual_trade(user_id: str, trade: dict):
                 status_code=403, detail="You do not have permission to short"
             )
 
+    other_account = trade.get("other_account")
+
+    if other_account:
+        try:
+            uuid.UUID(other_account, version=4)
+        except ValueError:
+            trade["other_account"] = None
+    else:
+        trade["other_account"] = None
+
     trade_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc).timestamp()
+    now_int = int(now)
     payload = {
         "trade_id": trade_id,
         "account_id": trade["account_id"],
-        "user_id": trade["user_id"],
+        "user_id": user_id,
         "direction": trade["direction"],  # Must be exact string: 'Buy' or 'Sell'
         "symbol_ticker": trade["ticker"],
-        "created_at": now,
-        "updated_at": now,
+        "created_at": now_int,
+        "updated_at": now_int,
         "quantity": int(trade["quantity"]),
         "price": str(trade["price"]),  # Kept as string for Postgres NUMERIC ingestion
-        "other_account": trade.get("other_account"),  # Can be None/Null
+        "other_account": trade["other_account"],  # Can be None/Null
     }
 
     # Pack to raw binary
@@ -696,11 +705,11 @@ async def individual_trade(user_id: str, trade: dict):
         logger.info("Updated existing position for account")
 
     # High Efficiency: Save to a single field named "d"
-    await redis_client.xadd("trade_stream", {"d": packed_bytes})
+    await redis_client.xadd(TRADE_STREAM, {"d": packed_bytes})
     duration_ms = (time.perf_counter() - start) * 1000
     logger.info(f"Succesfully booked a trade. Completed in {duration_ms:2f}ms")
 
-    return {"status": f"success, here is your trade_id {trade_id}"}
+    return {"status": "success", "trade_id": f"{trade_id}"}
 
 
 # endregion
@@ -737,6 +746,7 @@ async def get_all_user_trades_for_account(
     user_data = json.loads(raw_user)
 
     if account_id not in user_data["accounts_associated"]:
+        logger.warning("Invalid accound_id for user")
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
@@ -790,6 +800,7 @@ async def get_all_user_trades_for_account_for_ticker(
     user_data = json.loads(raw_user)
 
     if account_id not in user_data["accounts_associated"]:
+        logger.warning("Invalid accound_id for user")
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
@@ -865,12 +876,13 @@ async def get_all_user_trades_for_account_for_time(
     time_end: datetime,
     user_id: str = Depends(verify_cookie),
 ):
-    logger.info("Recieved request for trade data. Completed in {duration_ms:2f}ms")
+    logger.info("Recieved request for trade data")
 
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
     if account_id not in user_data["accounts_associated"]:
+        logger.warning("Invalid accound_id for user")
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
@@ -936,6 +948,7 @@ async def get_all_user_trades_for_account_for_ticker_for_time(
     user_data = json.loads(raw_user)
 
     if account_id not in user_data["accounts_associated"]:
+        logger.warning("Invalid accound_id for user")
         raise HTTPException(
             status_code=401, detail="You do not have access to this account"
         )
