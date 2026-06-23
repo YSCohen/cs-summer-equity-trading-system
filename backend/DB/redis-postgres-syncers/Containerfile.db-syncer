@@ -6,7 +6,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {unimplemented!()}" > src/db-syncer.rs
 RUN cargo build --release --bin db-syncer
-RUN rm -f target/release/deps/trade_writer* target/release/db-syncer*
+RUN rm -f target/release/deps/db_syncer* target/release/db-syncer*
 
 COPY ./src ./src
 RUN cargo build --release --bin db-syncer

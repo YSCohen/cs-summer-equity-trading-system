@@ -31,6 +31,7 @@ services:
             REDIS_STREAM_NAME: trade_stream
             REDIS_CONSUMER_GROUP: trade_processor_group
             WORKER_NAME: rust_worker_node_1
+            RUST_LOG: debug
 
     db-syncer:
         build:
@@ -43,6 +44,7 @@ services:
         environment:
             POSTGRES_CONFIG: host=postgres user=trade_admin password=super_secret_password dbname=trades_database
             REDIS_URL: redis://redis:6379/
+            RUST_LOG: debug
 
     trading-api:
         image: ghcr.io/maxrabz/fastapi:working
