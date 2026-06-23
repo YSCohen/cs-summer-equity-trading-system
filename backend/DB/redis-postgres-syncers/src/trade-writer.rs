@@ -151,7 +151,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
                     .unwrap_or_else(|_| "\\N".to_string());
 
-                let other_acc = trade.other_account.as_deref().unwrap_or("\\N");
+                let other_acc = trade.other_account.as_deref().filter(|value| !value.is_empty()).unwrap_or("\\N");
 
                 // OPTIMIZATION: Write directly into the single pre-allocated String buffer
                 let _ = writeln!(
@@ -194,12 +194,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 // If sending/closing fails, abort transaction and DO NOT ACK
                 if let Err(e) = sink.send(chunk).await {
-                    error!("Streaming COPY failed (transaction aborted): {}", e);
+                    log_postgres_error("Streaming COPY failed (transaction aborted)", &e);
                     continue;
                 }
 
                 if let Err(e) = sink.close().await {
-                    error!("Finalizing COPY failed (transaction aborted): {}", e);
+                    log_postgres_error("Finalizing COPY failed (transaction aborted)", &e);
                     continue;
                 }
 
@@ -236,5 +236,13 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
+    }
+}
+
+fn log_postgres_error(context: &str, err: &tokio_postgres::Error) {
+    if let Some(db_error) = err.as_db_error() {
+        error!("{}: {}", context, db_error);
+    } else {
+        error!("{}: {}", context, err);
     }
 }
