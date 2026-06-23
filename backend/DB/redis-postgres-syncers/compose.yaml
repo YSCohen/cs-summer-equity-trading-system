@@ -17,11 +17,11 @@ services:
         ports:
             - "6379:6379"
 
-    trade_writer:
+    trade-writer:
         build:
             context: .
             dockerfile: Containerfile.trade-writer
-        container_name: trade_writer
+        container_name: trade-writer
         depends_on:
             - postgres
             - redis
@@ -31,6 +31,18 @@ services:
             REDIS_STREAM_NAME: trade_stream
             REDIS_CONSUMER_GROUP: trade_processor_group
             WORKER_NAME: rust_worker_node_1
+
+    db-syncer:
+        build:
+            context: .
+            dockerfile: Containerfile.db-syncer
+        container_name: db-syncer
+        depends_on:
+            - postgres
+            - redis
+        environment:
+            POSTGRES_CONFIG: host=postgres user=trade_admin password=super_secret_password dbname=trades_database
+            REDIS_URL: redis://redis:6379/
 
     trading-api:
         image: ghcr.io/maxrabz/fastapi:working
