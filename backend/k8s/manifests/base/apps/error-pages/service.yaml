@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: error-page
+  namespace: frontend
+  labels:
+    app: error-page
+spec:
+  selector:
+    app: error-page
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

@@ -2,19 +2,18 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: streamlit-ingress
+  name: global-fallback-ingress
   namespace: frontend
-  annotations:
-    traefik.ingress.kubernetes.io/router.middlewares: frontend-streamlit-fallback@kubernetescrd
 spec:
+  # Notice there is NO 'host' field here. 
+  # This makes it the global cluster catch-all.
   rules:
-    - host: streamlit.localhost
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: streamlit-svc
+                name: error-page
                 port:
                   number: 80
