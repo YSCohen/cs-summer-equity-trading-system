@@ -7,19 +7,20 @@ edition = "2024"
 name = "trade-writer"
 path = "src/trade-writer.rs"
 
-# [[bin]]
-# name = "db-syncer"
-# path = "src/db-syncer.rs"
+[[bin]]
+name = "db-syncer"
+path = "src/db-syncer.rs"
 
 [dependencies]
-tokio = { version = "1.52", features = ["full"] }
-redis = { version = "1.2", features = ["tokio-comp", "connection-manager"] }
-tokio-postgres = { version = "0.7" }
-serde = { version = "1.0", features = ["derive"] }
-rmp-serde = "1.1"
-futures-util = "0.3"
-dotenvy = "0.15"
-jiff = "0.2"
 bytes = "1.11"
-tracing = "0.1.44"
-tracing-subscriber = "0.3.23"
+dotenvy = "0.15"
+futures-util = "0.3"
+jiff = "0.2"
+redis = { version = "1.2", features = ["tokio-comp", "connection-manager"] }
+rmp-serde = "1.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.52", features = ["full"] }
+tokio-postgres = { version = "0.7" }
+tracing = "0.1"
+tracing-subscriber = "0.3"
