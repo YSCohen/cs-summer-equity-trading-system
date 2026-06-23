@@ -15,4 +15,4 @@ configMapGenerator:
     files:
       # This pulls the schema directly from your FastAPI source code.
       # Adjust the relative path if needed based on your exact folder depth.
-      - 01-schema.sql=../../../../../FastAPI/schema.sql
+      - 01-schema.sql=../../../../../DB/redis-postgres-syncers/init.sql
