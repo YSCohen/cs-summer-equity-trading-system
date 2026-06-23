@@ -7,29 +7,31 @@
 # ]
 # ///
 
-# for testing the trade writer. send A LOT of trades to redis
+# for testing the trade writer. sends trades to redis
 
 import asyncio
+# import itertools
+import os
 import random
 import string
-import os
 import time
 import uuid
+
 import msgpack
 import redis.asyncio as aioredis
-# import itertools
+
+
+# options for how many trades to send:
 
 # # AAA, AAB, ..., ZZY, ZZZ
 # # 17_576 combinations
 # TICKERS = ["".join(c) for c in itertools.product(string.ascii_uppercase, repeat=3)]
 
-# just 26 tickers
+# AAA, BBB, ..., YYY, ZZZ
+# 26 combinations
 TICKERS = [c * 3 for c in string.ascii_uppercase]
 
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-
-# 2. Update line 27
-redis_client = aioredis.Redis(host=REDIS_HOST, port=6379, db=0)
+redis_client = aioredis.Redis(host=os.getenv("REDIS_HOST", "localhost"))
 
 
 async def individual_trade(trade: dict):
@@ -47,21 +49,19 @@ async def individual_trade(trade: dict):
         "updated_at": int(time.time()),
         "quantity": int(trade["quantity"]),
         "price": str(trade["price"]),
-        "other_account": trade.get("other_account"),
+        "other_account": trade["other_account"],
     }
     packed_bytes = msgpack.packb(payload)
     await redis_client.xadd("trade_stream", {"d": packed_bytes})
 
 
 async def generate_fake_trades():
-    redis_client = aioredis.from_url(f"redis://{REDIS_HOST}:6379")
-
     try:
         for symbol in TICKERS:
             direction = random.choice(["Buy", "Sell"])
             quantity = random.randint(1, 500)
             price = f"{random.uniform(10.0, 1500.0):.2f}"
-            other_account = str(uuid.uuid4()) if random.random() < 0.3 else None
+            other_account = str(uuid.uuid4()) if random.random() < 0.3 else ""
 
             trade = {
                 "account_id": str(uuid.uuid4()),
@@ -76,9 +76,6 @@ async def generate_fake_trades():
             await individual_trade(trade)
 
             print(f"[SENT] {direction} {quantity} {symbol} @ {price}")
-
-            # # Throttle the loop so it doesn't overwhelm redis
-            # await asyncio.sleep(0.1)
 
     except asyncio.CancelledError:
         print("\nStopping the generator safely...")
