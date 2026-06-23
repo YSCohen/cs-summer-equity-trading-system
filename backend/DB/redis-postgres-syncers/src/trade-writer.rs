@@ -151,7 +151,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
                     .unwrap_or_else(|_| "\\N".to_string());
 
-                let other_acc = trade.other_account.as_deref().filter(|value| !value.is_empty()).unwrap_or("\\N");
+                let other_acc = trade
+                    .other_account
+                    .as_deref()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("\\N");
 
                 // OPTIMIZATION: Write directly into the single pre-allocated String buffer
                 let _ = writeln!(
