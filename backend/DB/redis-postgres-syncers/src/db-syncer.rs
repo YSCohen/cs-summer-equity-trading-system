@@ -68,12 +68,8 @@ fn parse_json_row<T: DeserializeOwned>(
     id: &str,
     json_str: &str,
 ) -> Result<T, String> {
-    serde_json::from_str(json_str).map_err(|err| {
-        format!(
-            "Skipping: Failed to parse JSON for {} {}: {}",
-            entity_name, id, err
-        )
-    })
+    serde_json::from_str(json_str)
+        .map_err(|err| format!("Skipping: Failed to parse JSON for {entity_name} {id}: {err}"))
 }
 
 fn build_upsert_sql(
@@ -84,12 +80,11 @@ fn build_upsert_sql(
     update_assignments: &str,
 ) -> String {
     format!(
-        "INSERT INTO {} ({copy_columns})
-        SELECT {copy_columns}
-        FROM {}
-        ON CONFLICT ({conflict_column}) DO UPDATE SET
-        {update_assignments}",
-        target_table_name, staging_table_name
+        "INSERT INTO {target_table_name} ({copy_columns})
+  SELECT {copy_columns}
+  FROM {staging_table_name}
+  ON CONFLICT ({conflict_column}) DO UPDATE SET
+    {update_assignments}"
     )
 }
 
@@ -223,7 +218,7 @@ async fn sync_users(
             target_table_name: "users",
             copy_columns: "user_id, username, oauth_key, accounts_associated, created_at, updated_at",
             conflict_column: "user_id",
-            update_assignments: "username = EXCLUDED.username,\n oauth_key = EXCLUDED.oauth_key,\n accounts_associated = EXCLUDED.accounts_associated,\n updated_at = EXCLUDED.updated_at",
+            update_assignments: "username = EXCLUDED.username,\n    oauth_key = EXCLUDED.oauth_key,\n    accounts_associated = EXCLUDED.accounts_associated,\n    updated_at = EXCLUDED.updated_at",
             parse_row: |id, json| parse_json_row::<User>("user", id, json),
             format_row: |id, data| {
                 format!(
@@ -264,7 +259,7 @@ async fn sync_accounts(
             target_table_name: "accounts",
             copy_columns: "account_id, account_name, positions, can_short, created_at, updated_at",
             conflict_column: "account_id",
-            update_assignments: "account_name = EXCLUDED.account_name,\n positions = EXCLUDED.positions,\n can_short = EXCLUDED.can_short,\n updated_at = EXCLUDED.updated_at",
+            update_assignments: "account_name = EXCLUDED.account_name,\n    positions = EXCLUDED.positions,\n    can_short = EXCLUDED.can_short,\n    updated_at = EXCLUDED.updated_at",
             parse_row: |id, json| parse_json_row::<Account>("account", id, json),
             format_row: |id, data| {
                 format!(
@@ -305,7 +300,7 @@ async fn sync_positions(
             target_table_name: "positions",
             copy_columns: "position_id, account_id, symbol_ticker, quantity, created_at, updated_at",
             conflict_column: "position_id",
-            update_assignments: "quantity = EXCLUDED.quantity,\n updated_at = EXCLUDED.updated_at",
+            update_assignments: "quantity = EXCLUDED.quantity,\n    updated_at = EXCLUDED.updated_at",
             parse_row: |id, json| parse_json_row::<Position>("position", id, json),
             format_row: |id, data| {
                 format!(
