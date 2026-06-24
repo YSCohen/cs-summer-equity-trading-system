@@ -1,21 +1,23 @@
 # --- Stage 1: Build ---
 FROM rust:latest AS builder
+
+RUN rustup target add x86_64-unknown-linux-musl
 WORKDIR /app
 
 # build deps in separate layer
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {unimplemented!()}" > src/trade-writer.rs
-RUN cargo build --release --bin trade-writer
-RUN rm -f target/release/deps/trade_writer* target/release/trade-writer*
+RUN cargo build --release --target x86_64-unknown-linux-musl --bin trade-writer
+RUN rm -f target/x86_64-unknown-linux-musl/release/deps/trade_writer* target/x86_64-unknown-linux-musl/release/trade-writer*
 
 COPY ./src ./src
-RUN cargo build --release --bin trade-writer
+RUN cargo build --release --target x86_64-unknown-linux-musl --bin trade-writer
 
 # --- Stage 2: Lightweight Runtime Container ---
-FROM debian:bookworm-slim
+FROM scratch
 WORKDIR /app
 
 # Copy compiled binary
-COPY --from=builder /app/target/release/trade-writer /app/trade-writer
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/trade-writer /app/trade-writer
 
 CMD ["./trade-writer"]
