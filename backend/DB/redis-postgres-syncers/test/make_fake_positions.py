@@ -8,52 +8,53 @@
 
 import asyncio
 import json
-import random
 import uuid
+import random
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
 
-ACCOUNT_NAMES = [
-    "savings",
-    "checking",
-    "investing",
-    "ira",
-    "trust fund",
-    "risky",
-    "bonds",
-    "pyramid scheme",
-    "piggy bank",
-    "under mattress",
-    "long term",
-    "dept. cloud credits",
-    "students AI credits",
+TICKERS = [
+    "AAPL",
+    "MSFT",
+    "AMZN",
+    "NVDA",
+    "META",
+    "GOOGL",
+    "GOOG",
+    "LLY",
+    "AVGO",
+    "TSLA",
+    "JPM",
+    "CMCSA",
+    "NKE",
+    "DHR",
+    "TXN",
 ]
 
 
 redis_client = aioredis.Redis(host="localhost")
 
 
-async def individual_account(account_name: str):
+async def individual_account(symbol: str):
     account_id = str(uuid.uuid4())
-    positions = []
     now = datetime.now(timezone.utc).isoformat()
     account_data = {
-        "account_name": account_name,
-        "positions": positions,
-        "can_short": bool(random.getrandbits(1)),
+        "account_id": account_id,
+        "symbol_ticker": symbol,
+        "quantity": random.randint(1, 100),
         "created_at": now,
         "updated_at": now,
     }
 
     await redis_client.hset("accounts", account_id, json.dumps(account_data))
-    print(f"[NEW ACCOUNT] {account_name} - {account_id}")
+    print(f"[NEW POSITION] {symbol} - {account_id}")
 
 
 async def make_fake_accounts():
     try:
-        for name in ACCOUNT_NAMES:
-            await individual_account(name)
+        for symbol in TICKERS:
+            await individual_account(symbol)
     finally:
         # Gracefully close the Redis connection pool
         await redis_client.aclose()
