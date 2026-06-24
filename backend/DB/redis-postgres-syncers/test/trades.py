@@ -19,7 +19,6 @@ import uuid
 import msgpack
 import redis.asyncio as aioredis
 
-
 # options for how many trades to send:
 
 # # AAA, AAB, ..., ZZY, ZZZ
