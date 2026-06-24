@@ -47,7 +47,7 @@ async def individual_account(symbol: str):
         "updated_at": now,
     }
 
-    await redis_client.hset("accounts", account_id, json.dumps(account_data))
+    await redis_client.hset("positions", account_id, json.dumps(account_data))
     print(f"[NEW POSITION] {symbol} - {account_id}")
 
 
