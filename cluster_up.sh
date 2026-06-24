@@ -154,11 +154,10 @@ for NS in data backend secrets; do
 done
 
 # Generate once, apply to all consumer namespaces
-# TODO: Send the password out for adminer access
 PG_PASS=$(openssl rand -base64 24 | tr -d '=+/' | cut -c1-24)
 for NS in data backend; do
     $ENGINE exec -i k8s-toolbox kubectl create secret generic db-credentials \
-        --from-literal=POSTGRES_USER=postgres \
+        --from-literal=POSTGRES_USER=trade_admin \
         --from-literal=POSTGRES_PASSWORD="$PG_PASS" \
         --namespace="$NS" \
         --dry-run=client -o yaml |
@@ -205,7 +204,9 @@ echo " 🟢 API Gateway       -> http://api.localhost:8080"
 echo " 📊 Streamlit UI      -> http://streamlit.localhost:8080"
 echo " 🦗 Locust Load Test  -> http://locust.localhost:8080"
 echo " 🔭 Grafana Metrics   -> http://grafana.localhost:8080"
+echo " 🐘 Adminer Database  -> http://adminer.localhost:8080"
 echo " "
-echo " 🔐 Default Credentials:"
-echo "    User: admin  |  Pass: Rust!"
+echo " 🔐 Default System Credentials:"
+echo "    Grafana UI -> User: admin | Pass: Rust!"
+echo "    PostgreSQL -> User: trade_admin | Pass: $PG_PASS"
 echo "📈 ======================================================= 📈"

@@ -101,6 +101,10 @@ chaos-redis:
 	@echo "🧨 Terminating Redis Pod..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl delete pods -l app=redis -n data
 
+chaos-adminer:
+	@echo "🧨 Terminating Redis Pod..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl delete pods -l app=adminer -n data
+
 chaos-node-stop:
 	@echo "🔥 Stopping the primary K3s node (Simulating Server Crash)..."
 	@$(DOCKER) exec -it k8s-toolbox k3d node stop k3d-dev-cluster-server-0
@@ -136,7 +140,7 @@ shell-postgres:
 # Open an interactive SQL prompt directly into your trading database!
 psql:
 	@echo "🐘 Starting interactive PostgreSQL session..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it statefulset/postgres -n data -- psql -U trade_admin -d trades_database
+	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it statefulset/postgres -n data -- psql -U trade_admin -d trading
 
 # Open an interactive Redis CLI session
 redis-cli:
@@ -177,6 +181,10 @@ logs-syncer:
 	@echo "📜 DB-Syncer logs..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=db-syncer -n backend --tail=100 -f
 
+logs-adminer:
+	@echo "📜 Adminer logs..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=adminer -n data --tail=100 -f
+
 logs-postgres:
 	@echo "📜 Postgres logs..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=postgres -n data --tail=100 -f
@@ -197,3 +205,20 @@ logs-all:
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=db-syncer  -n backend      --tail=50 --prefix
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=postgres   -n data         --tail=50 --prefix
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=redis      -n data         --tail=50 --prefix
+
+db-creds:
+	@echo "🔍 Fetching Postgres Credentials from cluster..."
+	@echo -n "User: "
+	@$(DOCKER) exec -it k8s-toolbox kubectl get secret db-credentials -n data -o jsonpath='{.data.POSTGRES_USER}' | base64 -d; echo ""
+	@echo -n "Pass: "
+	@$(DOCKER) exec -it k8s-toolbox kubectl get secret db-credentials -n data -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d; echo ""
+
+adminer-info:
+	@echo "🌐 Adminer UI: http://adminer.localhost:8080"
+	@$(MAKE) --no-print-directory db-creds
+
+status-adminer:
+	@echo "🐘 Checking Adminer Status..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl get pods,svc,ingress -n data -l app=adminer
+	@echo "🌐 Testing Ingress routing (Expected: HTTP 200 or 302)..."
+	@curl -s -o /dev/null -w "%{http_code}\n" -H "Host: adminer.localhost" http://localhost:8080
