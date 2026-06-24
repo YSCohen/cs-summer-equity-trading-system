@@ -19,7 +19,7 @@ services:
 
     trade-writer:
         build:
-            context: .
+            context: redis-postgres-syncers
             dockerfile: Containerfile.trade-writer
         container_name: trade-writer
         depends_on:
@@ -35,7 +35,7 @@ services:
 
     db-syncer:
         build:
-            context: .
+            context: redis-postgres-syncers
             dockerfile: Containerfile.db-syncer
         container_name: db-syncer
         depends_on:
