@@ -8,43 +8,31 @@
 
 import asyncio
 import json
+import os
 import random
 import uuid
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
 
-NAMES = [
-    "AAA",
-    "BBB",
-    "CCC",
-    "DDD",
-    "EEE",
-    "FFF",
-    "GGG",
-    "HHH",
-    "III",
-    "JJJ",
-    "KKK",
-    "LLL",
-    "MMM",
-    "NNN",
-    "OOO",
-    "PPP",
-    "QQQ",
-    "RRR",
-    "SSS",
-    "TTT",
-    "UUU",
-    "VVV",
-    "WWW",
-    "XXX",
-    "YYY",
-    "ZZZ",
+ACCOUNT_NAMES = [
+    "savings",
+    "checking",
+    "investing",
+    "ira",
+    "trust fund",
+    "risky",
+    "bonds",
+    "pyramid scheme",
+    "piggy bank",
+    "under mattress",
+    "long term",
+    "dept. cloud credits",
+    "students AI credits",
 ]
 
 
-redis_client = aioredis.Redis(host="localhost", port=6379, db=0)
+redis_client = aioredis.Redis(host=os.getenv("REDIS_HOST", "localhost"))
 
 
 async def individual_account(account_name: str):
@@ -60,12 +48,12 @@ async def individual_account(account_name: str):
     }
 
     await redis_client.hset("accounts", account_id, json.dumps(account_data))
-    print(f"[NEW USER] {account_name}  -  {account_id}")
+    print(f"[NEW ACCOUNT] {account_name} - {account_id}")
 
 
 async def make_fake_accounts():
     try:
-        for name in NAMES:
+        for name in ACCOUNT_NAMES:
             await individual_account(name)
     finally:
         # Gracefully close the Redis connection pool
