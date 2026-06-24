@@ -11,6 +11,10 @@ path = "src/trade-writer.rs"
 name = "db-syncer"
 path = "src/db-syncer.rs"
 
+[[bin]]
+name = "redis-populator"
+path = "src/redis-populator.rs"
+
 [dependencies]
 bytes = "1.11"
 dotenvy = "0.15"
