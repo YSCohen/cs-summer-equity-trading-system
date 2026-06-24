@@ -141,6 +141,31 @@ done
 echo "✅ API server is ready."
 
 # ============================================================
+# Create Postgres Password
+# ============================================================
+
+echo "🔐 Generating db-credentials secret..."
+
+# Pre-create the namespaces that need the secret before Flux runs
+for NS in data backend secrets; do
+    $ENGINE exec -i k8s-toolbox kubectl create namespace "$NS" \
+        --dry-run=client -o yaml |
+        $ENGINE exec -i k8s-toolbox kubectl apply -f -
+done
+
+# Generate once, apply to all consumer namespaces
+PG_PASS=$(openssl rand -base64 24 | tr -d '=+/' | cut -c1-24)
+for NS in data backend; do
+    $ENGINE exec -i k8s-toolbox kubectl create secret generic db-credentials \
+        --from-literal=POSTGRES_USER=postgres \
+        --from-literal=POSTGRES_PASSWORD="$PG_PASS" \
+        --namespace="$NS" \
+        --dry-run=client -o yaml |
+        $ENGINE exec -i k8s-toolbox kubectl apply -f -
+done
+echo "✅ db-credentials created in data and backend namespaces."
+
+# ============================================================
 # Bootstrapping Flux (Pure IaC)
 # ============================================================
 echo "📦 Bootstrapping Flux Controllers (Declarative Kustomize)..."

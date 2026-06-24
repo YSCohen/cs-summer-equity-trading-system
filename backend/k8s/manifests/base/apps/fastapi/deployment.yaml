@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: fastapi-api
-  namespace: backend
 spec:
   replicas: 1
   selector:
@@ -22,11 +21,11 @@ spec:
             - containerPort: 8000
           env:
             - name: REDIS_HOST
-              value: "redis.backend.svc.cluster.local"
+              value: "redis.data.svc.cluster.local"
             - name: REDIS_PORT
               value: "6379"
             - name: POSTGRES_HOST
-              value: "postgres.backend.svc.cluster.local"
+              value: "postgres.data.svc.cluster.local"
             - name: POSTGRES_PORT
               value: "5432"
             - name: POSTGRES_DB

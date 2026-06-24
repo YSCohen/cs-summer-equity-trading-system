@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: error-page
-  namespace: frontend
   labels:
     app: error-page
 spec:
@@ -27,9 +26,12 @@ spec:
             runAsNonRoot: true
             runAsUser: 101
           volumeMounts:
-            - name: html-volume
-              mountPath: /usr/share/nginx/html
-            # Add these three mounts to allow Nginx to write its startup files
+            - name: config-volume
+              mountPath: /usr/share/nginx/html/index.html
+              subPath: index.html
+            - name: config-volume
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
             - name: tmp-volume
               mountPath: /tmp
             - name: run-volume
@@ -37,7 +39,7 @@ spec:
             - name: cache-volume
               mountPath: /var/cache/nginx
       volumes:
-        - name: html-volume
+        - name: config-volume
           configMap:
             name: error-page-content
         # Map those mounts to empty, transient directories

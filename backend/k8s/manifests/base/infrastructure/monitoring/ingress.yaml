@@ -3,7 +3,6 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: grafana-ingress
-  namespace: monitoring
 spec:
   rules:
     - host: grafana.localhost
@@ -21,7 +20,6 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: loki-ingress
-  namespace: monitoring
 spec:
   rules:
     - host: loki.localhost

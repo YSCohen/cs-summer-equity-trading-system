@@ -26,7 +26,7 @@ volumes:
 
 servers: 1
 agents: 2
-image: rancher/k3s:v1.28.2-k3s1
+image: rancher/k3s:v1.36.1-k3s1
 ports:
   - port: 8080:80 # Maps localhost:8080 to the cluster's incoming web traffic
     nodeFilters:

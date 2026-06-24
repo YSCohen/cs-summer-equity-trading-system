@@ -2,20 +2,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: trade-writer
+  name: db-syncer
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: trade-writer
+      app: db-syncer
   template:
     metadata:
       labels:
-        app: trade-writer
+        app: db-syncer
     spec:
       containers:
-        - name: trade-writer
-          image: ghcr.io/yscohen/trade-writer:latest
+        - name: db-syncer
+          image: ghcr.io/yscohen/db-syncer:latest
           imagePullPolicy: Always
           env:
             - name: POSTGRES_USER
@@ -34,13 +34,5 @@ spec:
 
             - name: REDIS_URL
               value: "redis://redis.data.svc.cluster.local:6379/"
-            - name: REDIS_STREAM_NAME
-              value: "trade_stream"
-            - name: REDIS_CONSUMER_GROUP
-              value: "trade_processor_group"
-
-            # Use the Downward API to dynamically inject the specific Pod name!
-            - name: WORKER_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
+            - name: RUST_LOG
+              value: "debug"

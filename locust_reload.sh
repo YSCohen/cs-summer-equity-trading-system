@@ -34,6 +34,6 @@ cat "$PROJECT_ROOT/backend/Locust/locustfile.py" |
 
 # 3. Force the Locust deployment to restart and pick up the new configuration
 echo "♻️ Restarting Locust pods to apply changes..."
-$ENGINE exec -i k8s-toolbox kubectl rollout restart deployment/locust-load-tester
+$ENGINE exec -i k8s-toolbox kubectl rollout restart deployment/locust-load-tester -n load-testing
 
 echo "✅ Locust configuration successfully reloaded!"

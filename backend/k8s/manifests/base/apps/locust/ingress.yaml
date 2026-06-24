@@ -3,7 +3,6 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: locust-ingress
-  namespace: load-testing
 spec:
   rules:
     - host: locust.localhost

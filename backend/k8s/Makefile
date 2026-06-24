@@ -99,7 +99,7 @@ chaos-worker:
 
 chaos-redis:
 	@echo "🧨 Terminating Redis Pod..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl delete pods -l app=redis -n backend
+	@$(DOCKER) exec -it k8s-toolbox kubectl delete pods -l app=redis -n data
 
 chaos-node-stop:
 	@echo "🔥 Stopping the primary K3s node (Simulating Server Crash)..."
@@ -131,17 +131,17 @@ shell-worker:
 # Open a shell inside the Postgres Database container
 shell-postgres:
 	@echo "🔌 Connecting to Postgres container..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it statefulset/postgres -n backend -- /bin/sh
+	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it statefulset/postgres -n data -- /bin/sh
 
 # Open an interactive SQL prompt directly into your trading database!
 psql:
 	@echo "🐘 Starting interactive PostgreSQL session..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it statefulset/postgres -n backend -- psql -U trade_admin -d trades_database
+	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it statefulset/postgres -n data -- psql -U trade_admin -d trades_database
 
 # Open an interactive Redis CLI session
 redis-cli:
 	@echo "🔴 Connecting to Redis CLI..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it deployment/redis -n backend -- redis-cli
+	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it deployment/redis -n data -- redis-cli
 
 # ==========================================
 # 💥 DATA GENERATION & SEEDING
@@ -153,6 +153,47 @@ seed-trades:
 	@cat ../DB/redis-postgres-syncers/test/send_fake_trades.py | \
 	$(DOCKER) exec -i k8s-toolbox kubectl run trade-seeder --rm -i -n backend \
 		--image=ghcr.io/astral-sh/uv:alpine \
-		--env="REDIS_HOST=redis.backend.svc.cluster.local" \
+		--env="REDIS_HOST=redis.data.svc.cluster.local" \
 		--restart=Never \
 		-- sh -c "cat > script.py && uv run script.py"
+
+# ==========================================
+# 📜 LOGS
+# ==========================================
+
+logs-api:
+	@echo "📜 FastAPI logs..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=fastapi -n backend --tail=100 -f
+
+logs-ui:
+	@echo "📜 Streamlit logs..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=streamlit -n frontend --tail=100 -f
+
+logs-worker:
+	@echo "📜 Trade-Writer logs..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=trade-writer -n backend --tail=100 -f
+
+logs-syncer:
+	@echo "📜 DB-Syncer logs..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=db-syncer -n backend --tail=100 -f
+
+logs-postgres:
+	@echo "📜 Postgres logs..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=postgres -n data --tail=100 -f
+
+logs-redis:
+	@echo "📜 Redis logs..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=redis -n data --tail=100 -f
+
+logs-flux:
+	@echo "📜 Flux reconciliation events..."
+	@$(DOCKER) exec -it k8s-toolbox flux logs --follow
+
+logs-all:
+	@echo "📜 All pods (last 50 lines each, no follow)..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=fastapi    -n backend      --tail=50 --prefix
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=streamlit  -n frontend     --tail=50 --prefix
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=trade-writer -n backend    --tail=50 --prefix
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=db-syncer  -n backend      --tail=50 --prefix
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=postgres   -n data         --tail=50 --prefix
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=redis      -n data         --tail=50 --prefix

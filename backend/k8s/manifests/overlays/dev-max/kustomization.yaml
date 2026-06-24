@@ -2,17 +2,22 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# This tells Kustomize to go grab the entire "base" stack we just built
 resources:
   - ../../base
 
-# We can put developer-specific overrides here!
-# For example, let's scale FastAPI down to 1 pod for your local machine:
 patches:
   - target:
-      kind: Deployment
-      name: fastapi-api
+      kind: HelmRelease
+      name: loki-stack
     patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 1
+      apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      metadata:
+        name: loki-stack
+      spec:
+        values:
+          prometheus:
+            server:
+              global:
+                scrape_interval: 15s
+

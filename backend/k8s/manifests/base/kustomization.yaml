@@ -7,7 +7,6 @@ resources:
   - namespaces.yaml
 
   # 2. Infrastructure Layer
-  - infrastructure/secrets
   - infrastructure/monitoring
 
   # 3. Data Layer
@@ -20,3 +19,4 @@ resources:
   - apps/streamlit
   - apps/trade-writer
   - apps/error-pages
+  - apps/db-syncer
