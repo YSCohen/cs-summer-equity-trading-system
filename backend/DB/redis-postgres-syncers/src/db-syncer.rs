@@ -84,7 +84,7 @@ async fn sync_users(
     }
 
     pg_client
-        .execute("TRUNCATE TABLE $1;", &[&staging_table_name])
+        .execute(&format!("TRUNCATE TABLE {};", staging_table_name), &[])
         .await?;
 
     debug!("cleared table {}", staging_table_name);
@@ -143,15 +143,16 @@ async fn sync_users(
             info!("wrote users into staging table");
 
             let upserted = pg_client.execute(
-                    "INSERT INTO $1 (user_id, username, oauth_key, accounts_associated, created_at, updated_at)
-                     SELECT user_id, username, oauth_key, accounts_associated, created_at, updated_at
-                     FROM $2
-                     ON CONFLICT (user_id) DO UPDATE SET
+                    &format!("INSERT INTO {} (user_id, username, oauth_key, accounts_associated, created_at, updated_at)
+                    SELECT user_id, username, oauth_key, accounts_associated, created_at, updated_at
+                    FROM {}
+                    ON CONFLICT (user_id) DO UPDATE SET
                         username = EXCLUDED.username,
                         oauth_key = EXCLUDED.oauth_key,
                         accounts_associated = EXCLUDED.accounts_associated,
                         updated_at = EXCLUDED.updated_at",
-                    &[&table_name, &staging_table_name],
+                    table_name, staging_table_name),
+                    &[],
                 )
                 .await?;
 
@@ -202,7 +203,7 @@ async fn sync_accounts(
     }
 
     pg_client
-        .execute("TRUNCATE TABLE $1;", &[&staging_table_name])
+        .execute(&format!("TRUNCATE TABLE {};", staging_table_name), &[])
         .await?;
 
     debug!("cleared table {}", staging_table_name);
@@ -264,15 +265,16 @@ async fn sync_accounts(
             info!("wrote accounts into staging table");
 
             let upserted = pg_client.execute(
-                    "INSERT INTO $1 (account_id, account_name, positions, can_short, created_at, updated_at)
-                     SELECT account_id, account_name, positions, can_short, created_at, updated_at
-                     FROM $2
-                     ON CONFLICT (account_id) DO UPDATE SET
+                    &format!("INSERT INTO {} (account_id, account_name, positions, can_short, created_at, updated_at)
+                    SELECT account_id, account_name, positions, can_short, created_at, updated_at
+                    FROM {}
+                    ON CONFLICT (account_id) DO UPDATE SET
                         account_name = EXCLUDED.account_name,
                         positions = EXCLUDED.positions,
                         can_short = EXCLUDED.can_short,
                         updated_at = EXCLUDED.updated_at",
-                    &[&table_name, &staging_table_name],
+                    table_name, staging_table_name),
+                    &[],
                 )
                 .await?;
 
@@ -323,7 +325,7 @@ async fn sync_positions(
     }
 
     pg_client
-        .execute("TRUNCATE TABLE $1;", &[&staging_table_name])
+        .execute(&format!("TRUNCATE TABLE {};", staging_table_name), &[])
         .await?;
 
     debug!("cleared table {}", staging_table_name);
@@ -385,13 +387,14 @@ async fn sync_positions(
             info!("wrote accounts into staging table");
 
             let upserted = pg_client.execute(
-                    "INSERT INTO $1 (position_id, account_id, symbol_ticker, quantity, created_at, updated_at)
-                     SELECT position_id, account_id, symbol_ticker, quantity, created_at, updated_at
-                     FROM $2
-                     ON CONFLICT (position_id) DO UPDATE SET
+                    &format!("INSERT INTO {} (position_id, account_id, symbol_ticker, quantity, created_at, updated_at)
+                    SELECT position_id, account_id, symbol_ticker, quantity, created_at, updated_at
+                    FROM {}
+                    ON CONFLICT (position_id) DO UPDATE SET
                         quantity = EXCLUDED.quantity,
                         updated_at = EXCLUDED.updated_at",
-                    &[&table_name, &staging_table_name],
+                    table_name, staging_table_name),
+                    &[],
                 )
                 .await?;
 
