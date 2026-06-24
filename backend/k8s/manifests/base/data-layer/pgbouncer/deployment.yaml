@@ -1,0 +1,73 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pgbouncer
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+    spec:
+      initContainers:
+        - name: userlist-init
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              printf '"%s" "%s"\n' "$AUTH_USER" "$AUTH_PASS" > /etc/pgbouncer/userlist.txt
+              echo "✅ userlist.txt written"
+          env:
+            - name: AUTH_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_USER
+            - name: AUTH_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: pgbouncer-runtime
+              mountPath: /etc/pgbouncer
+      containers:
+        - name: pgbouncer
+          image: ghcr.io/icoretech/pgbouncer-docker:1.25.2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 6432
+          volumeMounts:
+            - name: config
+              mountPath: /etc/pgbouncer/pgbouncer.ini
+              subPath: pgbouncer.ini
+            - name: pgbouncer-runtime
+              mountPath: /etc/pgbouncer
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          readinessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: config
+          configMap:
+            name: pgbouncer-config
+        - name: pgbouncer-runtime
+          emptyDir: {}

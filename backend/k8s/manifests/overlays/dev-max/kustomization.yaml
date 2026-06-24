@@ -7,6 +7,22 @@ resources:
 
 patches:
   - target:
+      kind: Deployment
+      name: fastapi-api
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: fastapi-api
+      spec:
+        template:
+          spec:
+            containers:
+              - name: fastapi
+                env:
+                  - name: ENVIRONMENT
+                    value: "dev-max"
+  - target:
       kind: HelmRelease
       name: loki-stack
     patch: |-

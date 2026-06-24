@@ -29,8 +29,26 @@ spec:
                   name: db-credentials
                   key: POSTGRES_PASSWORD
 
+            # Explicitly load the routing variables for interpolation
+            - name: PG_ROUTING_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: db-routing
+                  key: PG_ROUTING_HOST
+            - name: PG_ROUTING_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: db-routing
+                  key: PG_ROUTING_PORT
+            - name: PG_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: db-routing
+                  key: PG_DATABASE
+
+            # Build the connection string
             - name: POSTGRES_CONFIG
-              value: "host=postgres.data.svc.cluster.local user=$(POSTGRES_USER) password=$(POSTGRES_PASSWORD) dbname=trading"
+              value: "host=$(PG_ROUTING_HOST) port=$(PG_ROUTING_PORT) user=$(POSTGRES_USER) password=$(POSTGRES_PASSWORD) dbname=$(PG_DATABASE)"
 
             - name: REDIS_URL
               value: "redis://redis.data.svc.cluster.local:6379/"

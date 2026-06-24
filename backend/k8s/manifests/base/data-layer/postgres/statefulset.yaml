@@ -24,14 +24,26 @@ spec:
             - "log_connections=on"
             - "-c"
             - "log_disconnections=on"
+            - "-c"
+            - "shared_buffers=128MB" # Memory optimization
           ports:
             - containerPort: 5432
           env:
             - name: POSTGRES_DB
-              value: "trading"
+              valueFrom:
+                configMapKeyRef:
+                  name: db-routing
+                  key: PG_DATABASE
           envFrom:
             - secretRef:
                 name: db-credentials
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m" # Burstable for heavy queries
+              memory: "512Mi" # Shielded by PgBouncer memory footprint won't spike
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data

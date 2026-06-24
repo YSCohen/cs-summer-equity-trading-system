@@ -15,12 +15,20 @@ spec:
     spec:
       containers:
         - name: adminer
-          image: adminer:latest
+          image: adminer:5.4.2-standalone
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
           envFrom:
             - secretRef:
                 name: db-credentials
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
           volumeMounts:
             - name: autologin-script
               mountPath: /var/www/html/index.php

@@ -19,22 +19,47 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: db-credentials
           env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: ENVIRONMENT
+              value: "base"
             - name: REDIS_HOST
               value: "redis.data.svc.cluster.local"
             - name: REDIS_PORT
               value: "6379"
-            - name: POSTGRES_HOST
-              value: "postgres.data.svc.cluster.local"
-            - name: POSTGRES_PORT
-              value: "5432"
-            - name: POSTGRES_DB
-              value: "trading"
             - name: TRADE_STREAM
               value: "trade_stream"
-          envFrom:
-            - secretRef:
-                name: db-credentials
+
+            # Explicit mapping to the new PG_ROUTING variables
+            - name: POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: db-routing
+                  key: PG_ROUTING_HOST
+            - name: POSTGRES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: db-routing
+                  key: PG_ROUTING_PORT
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: db-routing
+                  key: PG_DATABASE
           resources:
             requests:
               cpu: "100m"
