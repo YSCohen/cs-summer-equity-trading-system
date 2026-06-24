@@ -8,6 +8,7 @@
 
 import asyncio
 import json
+import os
 import random
 import uuid
 from datetime import datetime, timezone
@@ -31,7 +32,7 @@ ACCOUNT_NAMES = [
 ]
 
 
-redis_client = aioredis.Redis(host="localhost")
+redis_client = aioredis.Redis(host=os.getenv("REDIS_HOST", "localhost"))
 
 
 async def individual_account(account_name: str):

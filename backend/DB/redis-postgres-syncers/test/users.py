@@ -8,6 +8,7 @@
 
 import asyncio
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -30,7 +31,7 @@ USERNAMES = [
 ]
 
 
-redis_client = aioredis.Redis(host="localhost")
+redis_client = aioredis.Redis(host=os.getenv("REDIS_HOST", "localhost"))
 
 
 async def individual_user(username: str):
@@ -48,7 +49,7 @@ async def individual_user(username: str):
     print(f"[NEW USER] {username} - {user_id}")
 
 
-async def make_fake_accounts():
+async def make_fake_users():
     try:
         for name in USERNAMES:
             await individual_user(name)
@@ -58,4 +59,4 @@ async def make_fake_accounts():
 
 
 if __name__ == "__main__":
-    asyncio.run(make_fake_accounts())
+    asyncio.run(make_fake_users())

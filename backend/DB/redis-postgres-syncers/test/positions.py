@@ -8,8 +8,9 @@
 
 import asyncio
 import json
-import uuid
+import os
 import random
+import uuid
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
@@ -33,7 +34,7 @@ TICKERS = [
 ]
 
 
-redis_client = aioredis.Redis(host="localhost")
+redis_client = aioredis.Redis(host=os.getenv("REDIS_HOST", "localhost"))
 
 
 async def individual_account(symbol: str):
@@ -51,7 +52,7 @@ async def individual_account(symbol: str):
     print(f"[NEW POSITION] {symbol} - {account_id}")
 
 
-async def make_fake_accounts():
+async def make_fake_positions():
     try:
         for symbol in TICKERS:
             await individual_account(symbol)
@@ -61,4 +62,4 @@ async def make_fake_accounts():
 
 
 if __name__ == "__main__":
-    asyncio.run(make_fake_accounts())
+    asyncio.run(make_fake_positions())
