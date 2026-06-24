@@ -7,7 +7,7 @@ import msgpack
 from app.core.redis import redis_client, redis_dictionaries
 from app.core.logging import logger
 from app.core.config import TRADE_STREAM
-from app.services.ticker_service import valid_tickers
+from app.services import ticker_service
 
 
 async def individual_trade(user_id: str, trade: dict):
@@ -33,7 +33,7 @@ async def individual_trade(user_id: str, trade: dict):
         )
 
     # Check ticker exists
-    if trade["ticker"] not in valid_tickers:
+    if trade["ticker"] not in ticker_service.valid_tickers:
         logger.warning("Invalid ticker for booking")
         raise HTTPException(status_code=422, detail="Ticker does not exist")
 

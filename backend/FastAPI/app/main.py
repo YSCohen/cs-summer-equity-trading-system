@@ -4,7 +4,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.core.database import create_pool
 from app.core.redis import redis_client
 from app.core.logging import logger
-from app.services.ticker_service import load_sp500
+from app.services import ticker_service
 from app.middleware.logging_middleware import logging_middleware
 
 from app.routers import (
@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
         raise
 
     try:
-        load_sp500()
+        ticker_service.valid_tickers = ticker_service.load_sp500()
 
         logger.info("Loaded S&P Tickers")
 

@@ -7,9 +7,11 @@ CSV_PATH = BASE_DIR / "sp500.csv"
 valid_tickers = set()
 
 
-def load_sp500() -> set[str]:
-    global valid_tickers
+def load_sp500():
     with open(CSV_PATH, newline="") as file:
         reader = csv.DictReader(file)
 
-        valid_tickers = {row["ticker"].upper() for row in reader}
+        return {
+            row["ticker"].upper()
+            for row in reader
+        }
