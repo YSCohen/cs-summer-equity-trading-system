@@ -1,23 +1,40 @@
+# syntax=docker/dockerfile:1
+
 # --- Stage 1: Build ---
 FROM rust:latest AS builder
 
-RUN rustup target add x86_64-unknown-linux-musl
+# BuildKit automatically sets TARGETARCH var ('amd64' or 'arm64')
+ARG TARGETARCH
+
+# map Docker arch name to Rust arch name, and save target triple as env var
+ARG RUST_ARCH=${TARGETARCH/amd64/x86_64}
+ARG RUST_ARCH=${RUST_ARCH/arm64/aarch64}
+ENV RUST_TARGET=${RUST_ARCH}-unknown-linux-musl
+
+RUN rustup target add $RUST_TARGET
+
+# Install musl tools to ensure static linking works across arches
+RUN apt-get update && apt-get install -y musl-tools
+
 WORKDIR /app
 
 # build deps in separate layer
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {unimplemented!()}" > src/db-syncer.rs
-RUN cargo build --release --target x86_64-unknown-linux-musl --bin db-syncer
-RUN rm -f target/x86_64-unknown-linux-musl/release/deps/db_syncer* target/x86_64-unknown-linux-musl/release/db-syncer*
+RUN cargo build --release --target $RUST_TARGET --bin db-syncer
+RUN rm -f target/$RUST_TARGET/release/deps/db_syncer* target/$RUST_TARGET/release/db-syncer*
 
 COPY ./src ./src
-RUN cargo build --release --target x86_64-unknown-linux-musl --bin db-syncer
+RUN cargo build --release --target $RUST_TARGET --bin db-syncer
+
+# Move the binary to a predictable location for Stage 2
+RUN cp target/$RUST_TARGET/release/db-syncer /app/db-syncer-binary
 
 # --- Stage 2: Lightweight Runtime Container ---
 FROM scratch
 WORKDIR /app
 
-# Copy compiled binary
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/db-syncer /app/db-syncer
+# Copy compiled binary from the predictable location
+COPY --from=builder /app/db-syncer-binary /app/db-syncer
 
 CMD ["./db-syncer"]
