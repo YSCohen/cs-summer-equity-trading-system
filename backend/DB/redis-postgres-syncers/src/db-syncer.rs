@@ -1,4 +1,4 @@
-//! copy positions, accounts, users from redis to postgres
+//! copy users, accounts, positions from redis to postgres
 
 use bytes::Bytes;
 use dotenvy::dotenv;
@@ -40,16 +40,136 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Connect to redis
     let redis_client = redis::Client::open(redis_url)?;
-    let redis_conn = redis_client.get_multiplexed_async_connection().await?;
+    let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
     debug!("connected to redis");
 
-    sync_accounts(pg_client, redis_conn).await?;
+    sync_users(&pg_client, &mut redis_conn).await?;
+    sync_accounts(&pg_client, &mut redis_conn).await?;
+    sync_positions(&pg_client, &mut redis_conn).await?;
 
     Ok(())
 }
 
 #[derive(serde::Deserialize)]
-struct AccountData {
+struct User {
+    username: String,
+    oauth_key: String,
+    accounts_associated: Vec<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+async fn sync_users(
+    pg_client: &tokio_postgres::Client,
+    redis_conn: &mut redis::aio::MultiplexedConnection,
+) -> Result<(), Box<dyn Error + 'static>> {
+    let table_name = "users";
+    let staging_table_name = "users_sync_stage";
+
+    debug!("sync users...");
+
+    let users: std::collections::HashMap<String, String> = redis::cmd("HGETALL")
+        .arg(table_name)
+        .query_async(&mut *redis_conn)
+        .await?;
+
+    info!(
+        "found {} users in redis dictionary \"{}\"",
+        users.len(),
+        table_name
+    );
+    if users.is_empty() {
+        info!("nothing to sync");
+        return Ok(());
+    }
+
+    pg_client
+        .execute("TRUNCATE TABLE $1;", &[&staging_table_name])
+        .await?;
+
+    debug!("cleared table {}", staging_table_name);
+
+    let mut copy_payload_buffer = String::with_capacity(users.len() * 200);
+    let mut skipped = 0;
+
+    for (id_str, json_str) in users {
+        // Deserialize the JSON Value
+        let data: User = match serde_json::from_str(&json_str) {
+            Ok(d) => d,
+            Err(e) => {
+                error!("Skipping: Failed to parse JSON for user {}: {}", id_str, e);
+                skipped += 1;
+                continue;
+            }
+        };
+
+        // Write one tab-delimited row for PostgreSQL COPY text format.
+        let _ = writeln!(
+            &mut copy_payload_buffer,
+            "{}\t{}\t{}\t{}\t{}\t{}",
+            id_str,
+            data.username,
+            data.oauth_key,
+            to_pg_text_array_literal(&data.accounts_associated),
+            data.created_at,
+            data.updated_at,
+        );
+    }
+
+    debug!("created copy payload buffer");
+
+    if copy_payload_buffer.is_empty() {
+        info!(
+            "No valid user rows to copy (skipped {}). Sync completed with no writes.",
+            skipped
+        );
+        return Ok(());
+    }
+
+    // this _is_ safe, because i set the staging_table_name var myself
+    let copy_query = format!(
+        "COPY {} (user_id, username, oauth_key, accounts_associated, created_at, updated_at) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')",
+        staging_table_name
+    );
+
+    match pg_client.copy_in(&copy_query).await {
+        Ok(sink) => {
+            tokio::pin!(sink);
+
+            let chunk = Bytes::from(copy_payload_buffer);
+            sink.send(chunk).await?;
+            sink.close().await?;
+
+            info!("wrote users into staging table");
+
+            let upserted = pg_client.execute(
+                    "INSERT INTO $1 (user_id, username, oauth_key, accounts_associated, created_at, updated_at)
+                     SELECT user_id, username, oauth_key, accounts_associated, created_at, updated_at
+                     FROM $2
+                     ON CONFLICT (user_id) DO UPDATE SET
+                        username = EXCLUDED.username,
+                        oauth_key = EXCLUDED.oauth_key,
+                        accounts_associated = EXCLUDED.accounts_associated,
+                        updated_at = EXCLUDED.updated_at",
+                    &[&table_name, &staging_table_name],
+                )
+                .await?;
+
+            if skipped > 0 {
+                warn!("skipped {} malformed user payloads from redis", skipped);
+            }
+
+            info!("upserted {} users to {} table", upserted, table_name);
+        }
+        Err(e) => {
+            error!("failed to initialize postgres COPY context: {}", e);
+        }
+    }
+    Ok(())
+}
+
+#[derive(serde::Deserialize)]
+struct Account {
     account_name: String,
     positions: Vec<String>,
     can_short: bool,
@@ -58,38 +178,41 @@ struct AccountData {
 }
 
 async fn sync_accounts(
-    pg_client: tokio_postgres::Client,
-    mut redis_conn: redis::aio::MultiplexedConnection,
+    pg_client: &tokio_postgres::Client,
+    redis_conn: &mut redis::aio::MultiplexedConnection,
 ) -> Result<(), Box<dyn Error + 'static>> {
-    debug!("Starting account sync...");
+    let table_name = "accounts";
+    let staging_table_name = "accounts_sync_stage";
+
+    debug!("sync accounts...");
 
     let accounts: std::collections::HashMap<String, String> = redis::cmd("HGETALL")
-        .arg("accounts")
-        .query_async(&mut redis_conn)
+        .arg(table_name)
+        .query_async(&mut *redis_conn)
         .await?;
 
+    info!(
+        "found {} accounts in redis dictionary \"{}\"",
+        accounts.len(),
+        table_name
+    );
     if accounts.is_empty() {
-        info!("No accounts found in Redis. Nothing to sync.");
+        info!("nothing to sync");
         return Ok(());
-    } else {
-        info!(
-            "Found {} accounts in Redis. Starting migration...",
-            accounts.len()
-        );
     }
 
     pg_client
-        .batch_execute("TRUNCATE TABLE accounts_sync_stage;")
+        .execute("TRUNCATE TABLE $1;", &[&staging_table_name])
         .await?;
 
-    debug!("cleared staging table");
+    debug!("cleared table {}", staging_table_name);
 
-    let mut copy_payload_buffer = String::with_capacity(accounts.len().saturating_mul(160));
+    let mut copy_payload_buffer = String::with_capacity(accounts.len() * 200);
     let mut skipped = 0;
 
     for (id_str, json_str) in accounts {
         // Deserialize the JSON Value
-        let data: AccountData = match serde_json::from_str(&json_str) {
+        let data: Account = match serde_json::from_str(&json_str) {
             Ok(d) => d,
             Err(e) => {
                 error!(
@@ -105,12 +228,12 @@ async fn sync_accounts(
         let _ = writeln!(
             &mut copy_payload_buffer,
             "{}\t{}\t{}\t{}\t{}\t{}",
-            &id_str,
-            &data.account_name,
+            id_str,
+            data.account_name,
             to_pg_text_array_literal(&data.positions),
             data.can_short,
-            &data.created_at,
-            &data.updated_at,
+            data.created_at,
+            data.updated_at,
         );
     }
 
@@ -124,9 +247,13 @@ async fn sync_accounts(
         return Ok(());
     }
 
-    let copy_query = "COPY accounts_sync_stage (account_id, account_name, positions, can_short, created_at, updated_at) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')";
+    // this _is_ safe, because i set the staging_table_name var myself
+    let copy_query = format!(
+        "COPY {} (account_id, account_name, positions, can_short, created_at, updated_at) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')",
+        staging_table_name
+    );
 
-    match pg_client.copy_in(copy_query).await {
+    match pg_client.copy_in(&copy_query).await {
         Ok(sink) => {
             tokio::pin!(sink);
 
@@ -137,26 +264,145 @@ async fn sync_accounts(
             info!("wrote accounts into staging table");
 
             let upserted = pg_client.execute(
-                    "INSERT INTO accounts (account_id, account_name, positions, can_short, created_at, updated_at)
+                    "INSERT INTO $1 (account_id, account_name, positions, can_short, created_at, updated_at)
                      SELECT account_id, account_name, positions, can_short, created_at, updated_at
-                     FROM accounts_sync_stage
+                     FROM $2
                      ON CONFLICT (account_id) DO UPDATE SET
                         account_name = EXCLUDED.account_name,
                         positions = EXCLUDED.positions,
                         can_short = EXCLUDED.can_short,
                         updated_at = EXCLUDED.updated_at",
-                    &[],
+                    &[&table_name, &staging_table_name],
                 )
                 .await?;
 
             if skipped > 0 {
-                warn!("skipped {} malformed account payloads from Redis", skipped);
+                warn!("skipped {} malformed account payloads from redis", skipped);
             }
 
-            info!("upserted {} accounts to accounts table", upserted);
+            info!("upserted {} accounts to {} table", upserted, table_name);
         }
         Err(e) => {
-            error!("Failed to initialize Postgres COPY context: {}", e);
+            error!("failed to initialize postgres COPY context: {}", e);
+        }
+    }
+    Ok(())
+}
+
+#[derive(serde::Deserialize)]
+struct Position {
+    account_id: String,
+    symbol_ticker: String,
+    quantity: i32,
+    created_at: String,
+    updated_at: String,
+}
+
+async fn sync_positions(
+    pg_client: &tokio_postgres::Client,
+    redis_conn: &mut redis::aio::MultiplexedConnection,
+) -> Result<(), Box<dyn Error + 'static>> {
+    let table_name = "positions";
+    let staging_table_name = "positions_sync_stage";
+
+    debug!("sync positions...");
+
+    let positions: std::collections::HashMap<String, String> = redis::cmd("HGETALL")
+        .arg(table_name)
+        .query_async(&mut *redis_conn)
+        .await?;
+
+    info!(
+        "found {} positions in redis dictionary \"{}\"",
+        positions.len(),
+        table_name
+    );
+    if positions.is_empty() {
+        info!("nothing to sync");
+        return Ok(());
+    }
+
+    pg_client
+        .execute("TRUNCATE TABLE $1;", &[&staging_table_name])
+        .await?;
+
+    debug!("cleared table {}", staging_table_name);
+
+    let mut copy_payload_buffer = String::with_capacity(positions.len() * 200);
+    let mut skipped = 0;
+
+    for (id_str, json_str) in positions {
+        // Deserialize the JSON Value
+        let data: Position = match serde_json::from_str(&json_str) {
+            Ok(d) => d,
+            Err(e) => {
+                error!(
+                    "Skipping: Failed to parse JSON for position {}: {}",
+                    id_str, e
+                );
+                skipped += 1;
+                continue;
+            }
+        };
+
+        // Write one tab-delimited row for PostgreSQL COPY text format.
+        let _ = writeln!(
+            &mut copy_payload_buffer,
+            "{}\t{}\t{}\t{}\t{}\t{}",
+            id_str,
+            data.account_id,
+            data.symbol_ticker,
+            data.quantity,
+            data.created_at,
+            data.updated_at,
+        );
+    }
+
+    debug!("created copy payload buffer");
+
+    if copy_payload_buffer.is_empty() {
+        info!(
+            "No valid position rows to copy (skipped {}). Sync completed with no writes.",
+            skipped
+        );
+        return Ok(());
+    }
+
+    // this _is_ safe, because i set the staging_table_name var myself
+    let copy_query = format!(
+        "COPY {} (position_id, account_id, symbol_ticker, quantity, created_at, updated_at) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')",
+        staging_table_name
+    );
+
+    match pg_client.copy_in(&copy_query).await {
+        Ok(sink) => {
+            tokio::pin!(sink);
+
+            let chunk = Bytes::from(copy_payload_buffer);
+            sink.send(chunk).await?;
+            sink.close().await?;
+
+            info!("wrote accounts into staging table");
+
+            let upserted = pg_client.execute(
+                    "INSERT INTO $1 (position_id, account_id, symbol_ticker, quantity, created_at, updated_at)
+                     SELECT position_id, account_id, symbol_ticker, quantity, created_at, updated_at
+                     FROM $2
+                     ON CONFLICT (position_id) DO UPDATE SET
+                        quantity = EXCLUDED.quantity,
+                        updated_at = EXCLUDED.updated_at",
+                    &[&table_name, &staging_table_name],
+                )
+                .await?;
+
+            if skipped > 0 {
+                warn!("skipped {} malformed position payloads from redis", skipped);
+            }
+
+            info!("upserted {} positions to {} table", upserted, table_name);
+        }
+        Err(e) => {
+            error!("failed to initialize postgres COPY context: {}", e);
         }
     }
     Ok(())
