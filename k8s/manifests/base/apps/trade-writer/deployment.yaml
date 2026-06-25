@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: trade-writer
-          image: ghcr.io/yscohen/trade-writer:latest
+          image: ghcr.io/yscohen/trade-writer:dev
           imagePullPolicy: Always
           env:
             - name: POSTGRES_USER
@@ -56,6 +56,9 @@ spec:
               value: "trade_stream"
             - name: REDIS_CONSUMER_GROUP
               value: "trade_processor_group"
+
+            - name: LOKI_URL
+              value: "http://loki-stack.monitoring.svc.cluster.local:3100"
 
             - name: WORKER_NAME
               valueFrom:
