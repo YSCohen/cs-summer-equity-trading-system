@@ -16,5 +16,4 @@ configMapGenerator:
   - name: locust-config
     namespace: load-testing
     files:
-      # Automatically pulls your python script into the cluster state!
       - locustfile.py=../../../../../locust/locustfile.py
