@@ -36,25 +36,27 @@ async fn main() {
         std::process::exit(1);
     }
 
-    info!("=== STARTING TRADE WRITER ===");
+    info!("=== STARTING TRADE WRITER <is dev?> ===");
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
         error!(%err, "Fatal application initialization error");
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
 }
 
 fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
-    let loki_url = env::var("LOKI_URL")
-        .unwrap_or("http://loki-stack.monitoring.svc.cluster.local:3100".to_string());
+    let loki_url = env::var("LOKI_URL").map_err(|_| "LOKI_URL must be set")?;
 
     let loki_url = Url::parse(&loki_url)?;
-    let (loki_layer, loki_task) = tracing_loki::builder().build_url(loki_url)?;
+    let (loki_layer, loki_task) = tracing_loki::builder()
+        .label("app", "trade-writer")?
+        .build_url(loki_url)?;
 
     tracing_subscriber::registry()
         .with(loki_layer)
-        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
+        // .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
         .init();
 
     tokio::spawn(loki_task);
