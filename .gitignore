@@ -3,7 +3,3 @@ __pycache__
 .ruff_cache
 .DS_Store
 .idea/
-
-/logs/*/*
-!/logs/*/
-!/logs/**/.gitkeep

@@ -1,0 +1,23 @@
+---
+name: Infrastructure - Local Cluster Test
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  test-cluster-bootstrapping:
+    name: Run cluster_up.sh
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Mask Podman to Force Docker Fallback
+        run: |
+          sudo rm -rf /usr/bin/podman /usr/libexec/podman
+
+      - name: Bootstrap k3d & Flux
+        run: |
+          ./cluster_up.sh

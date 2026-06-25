@@ -1,11 +1,3 @@
-# .gitignore
-
-# Editor and IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-
 # Kubernetes / Local Cluster temp files
 kubeconfig
 *.kubeconfig

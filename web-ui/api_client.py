@@ -5,13 +5,13 @@ import streamlit as st
 API_BASE_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
 
 
-
 def _get_session():
-    """Returns the shared requests.Session stored in Streamlit's session_state,
-    creating it if it doesn't exist yet. This is what carries the auth cookie
-    across requests."""
     if "http" not in st.session_state:
-        st.session_state.http = requests.Session()
+        session = requests.Session()
+        saved_cookie = st.session_state.get("saved_session_cookie")
+        if saved_cookie:
+            session.cookies.set("session", saved_cookie)
+        st.session_state.http = session
     return st.session_state.http
 
 
@@ -49,10 +49,20 @@ def login(username, password):
     )
 
     if response.status_code == 200:
-        # NOTE: backend does not currently return user_id on login.
-        # Once it does, capture it here, e.g.:
-        # return {"status": "success", "user_id": response.json().get("user_id")}
-        return {"status": "success"}
+        session_cookie = session.cookies.get("session")
+
+        if not session_cookie:
+            return {
+                "status": "error",
+                "message": "Login succeeded, but no session cookie was received.",
+            }
+
+        st.session_state.saved_session_cookie = session_cookie
+
+        return {
+            "status": "success",
+            "session_cookie": session_cookie,
+        }
     else:
         return {"status": "error", "message": _api_error(response)}
 

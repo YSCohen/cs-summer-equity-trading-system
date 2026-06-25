@@ -25,6 +25,10 @@ case "${1:-}" in
     REPO_NAME="dev-repo-max"
     TARGET_FILE="target-max.yaml"
     ;;
+--yehuda)
+    REPO_NAME="dev-repo-yehuda"
+    TARGET_FILE="target-yehuda.yaml"
+    ;;
 "")
     : # use defaults
     ;;
