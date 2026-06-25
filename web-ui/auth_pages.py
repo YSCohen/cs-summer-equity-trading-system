@@ -24,7 +24,7 @@ def render_login_page():
         result = login(username, password)
         if result["status"] == "success":
             st.session_state.username = username
-            remember_login(username)
+            remember_login(username, result["session_cookie"])
             st.success("Logged in")
             st.rerun()
         else:
@@ -45,7 +45,7 @@ def render_register_page():
             login_result = login(username, password)
             if login_result["status"] == "success":
                 st.session_state.username = username
-                remember_login(username)
+                remember_login(username, login_result["session_cookie"])
                 st.success(f"Account created for {result['username']}. Logging you in...")
                 st.rerun()
             else:

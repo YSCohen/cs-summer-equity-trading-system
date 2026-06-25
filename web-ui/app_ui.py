@@ -58,6 +58,8 @@ else:
         logout()
         forget_login()
         st.session_state.username = None
+        st.session_state.pop("saved_session_cookie", None)
+        st.session_state.pop("http", None)
         st.rerun()
 
     page_options = {
