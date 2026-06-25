@@ -93,10 +93,7 @@ if [ ! -d "$PROJECT_ROOT/k8s" ]; then
 fi
 
 cd "$PROJECT_ROOT/k8s"
-cat > .env <<EOF
-DOCKER_HOST_PATH=$ACTUAL_SOCK
-HOST_ROOT=$PROJECT_ROOT
-EOF
+echo "DOCKER_HOST_PATH=$ACTUAL_SOCK" >.env
 
 # ============================================================
 # Fix permissions
@@ -123,7 +120,8 @@ set -e
 echo "📦 Starting k8s-toolbox..."
 $ENGINE compose up -d --build
 sleep 2
-
+echo "HOST_ROOT=$HOST_ROOT"
+env | grep HOST_ROOT
 echo "🚀 Creating cluster (bootstrapping Flux controllers)..."
 
 # Use --no-host-dns to stop K3d from touching /etc/resolv.conf
