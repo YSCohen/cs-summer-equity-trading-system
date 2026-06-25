@@ -54,3 +54,11 @@ spec:
               value: "redis://redis.data.svc.cluster.local:6379/"
             - name: RUST_LOG
               value: "debug"
+
+            - name: LOKI_URL
+              value: "http://loki-stack.monitoring.svc.cluster.local:3100"
+
+            - name: WORKER_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
