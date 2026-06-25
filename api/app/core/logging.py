@@ -1,13 +1,21 @@
 import logbook
 import sys
+import json
+
+def json_formatter(record, handler):
+    # Package the log data into a dictionary and dump it to JSON
+    log_entry = {
+        "timestamp": record.time.isoformat(),
+        "level": record.level_name,
+        "target": record.channel,
+        "message": record.message
+    }
+    return json.dumps(log_entry)
 
 try:
-    stream_handler = logbook.StreamHandler(
-        sys.stdout,
-        level="INFO",
-        format_string="[{record.time:%Y-%m-%d %H:%M:%S}] {record.level_name}: {record.channel}: {record.message}",
-    )
-
+    stream_handler = logbook.StreamHandler(sys.stdout, level="INFO")
+    # Override the default text formatter with our JSON function
+    stream_handler.formatter = json_formatter
     stream_handler.push_application()
 
 except Exception as e:

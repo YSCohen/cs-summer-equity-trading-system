@@ -28,7 +28,7 @@ async def register_valid_user(username: str, password: str):
     }
     # send new User to redis
     await redis_client.hset(redis_dictionaries[0], user_id, json.dumps(user_data))
-    await redis_client.hset(redis_dictionaries[3], username, user_id)
+    await redis_client.hset(redis_dictionaries[3], username, json.dumps(user_id))
 
     return user_id
 
