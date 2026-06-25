@@ -10,8 +10,7 @@ use std::fmt::Write;
 use tokio_postgres::NoTls;
 use tracing::{debug, error, info, warn};
 use tracing_loki::url::Url;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Deserialize)]
 struct TradePayload {
@@ -36,7 +35,7 @@ async fn main() {
         std::process::exit(1);
     }
 
-    info!("=== STARTING TRADE WRITER <is dev?> ===");
+    info!("=== STARTING TRADE WRITER ===");
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
@@ -48,18 +47,23 @@ async fn main() {
 
 fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
     let loki_url = env::var("LOKI_URL").map_err(|_| "LOKI_URL must be set")?;
+    let worker_name = env::var("WORKER_NAME").map_err(|_| "WORKER_NAME must be set")?;
 
     let loki_url = Url::parse(&loki_url)?;
     let (loki_layer, loki_task) = tracing_loki::builder()
         .label("app", "trade-writer")?
+        .label("pod", worker_name)?
         .build_url(loki_url)?;
 
     tracing_subscriber::registry()
+        .with(LevelFilter::DEBUG)
         .with(loki_layer)
         // .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
         .init();
 
     tokio::spawn(loki_task);
+
+    debug!("connected to loki");
 
     Ok(())
 }
