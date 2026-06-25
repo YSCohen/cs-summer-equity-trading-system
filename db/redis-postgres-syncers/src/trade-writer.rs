@@ -32,6 +32,7 @@ async fn main() {
 
     if let Err(err) = init_tracing() {
         eprintln!("failed to initialize tracing: {}", err);
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
 
