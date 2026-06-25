@@ -22,7 +22,7 @@ services:
     volumes:
       # 2. FIXED: Map the socket to the EXACT SAME path inside the container as the host
       - ${DOCKER_HOST_PATH:-/var/run/docker.sock}:${DOCKER_HOST_PATH:-/var/run/docker.sock}:z
-      - ../../:/workspace:z
+      - ../:/workspace:z
       - ${HOST_ROOT}:${HOST_ROOT}:z
 networks:
   k3d-network:
