@@ -13,7 +13,7 @@ use tracing::{debug, error, info, warn};
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
-    info!("=== STARTING DB SYNCER ===");
+    info!("=== STARTING REDIS -> POSTGRES SYNCER ===");
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
@@ -34,7 +34,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
     tokio::spawn(async move {
         if let Err(e) = connection.await {
-            error!("PostgreSQL connection driver error: {}", e);
+            error!("postgres connection driver error: {}", e);
         }
     });
     debug!("connected to postgres");

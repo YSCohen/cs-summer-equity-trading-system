@@ -1,4 +1,6 @@
-//! Copy users, accounts, and positions from postgres back to redis dictionaries
+//! copy users, accounts, and positions from postgres tables back to redis dictionaries
+//! unnecessary?
+//! WIP!
 
 use dotenvy::dotenv;
 use serde::Serialize;
@@ -12,14 +14,14 @@ async fn main() {
     tracing_subscriber::fmt::init();
     info!("=== STARTING POSTGRES -> REDIS WRITER ===");
 
-    // Run the main pipeline and catch any fatal initialization errors
+    // run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
         error!(%err, "Fatal application initialization error");
         std::process::exit(1);
     }
 }
 
-async fn run() -> Result<(), Box<dyn Error>> {
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _ = dotenv();
 
     let pg_config = env::var("POSTGRES_CONFIG").map_err(|_| "POSTGRES_CONFIG must be set")?;
@@ -27,7 +29,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     debug!("read env vars");
 
-    // Connect to postgres
+    // connect to postgres
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -36,7 +38,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     });
     debug!("connected to postgres");
 
-    // Connect to redis
+    // connect to redis
     let redis_client = redis::Client::open(redis_url)?;
     let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
     debug!("connected to redis");
@@ -61,28 +63,20 @@ async fn sync_table_to_redis<T: Serialize>(
     spec: PgToRedisSyncSpec<T>,
 ) -> Result<(), Box<dyn Error + 'static>> {
     debug!("fetching {} from postgres...", spec.entity_name);
-
     let rows = pg_client.query(spec.select_sql, &[]).await?;
-
     info!("found {} {} in postgres", rows.len(), spec.entity_name);
 
-    if rows.is_empty() {
-        info!(
-            "nothing to sync, wiping empty redis key \"{}\"",
-            spec.redis_key
-        );
-        let _: () = redis::cmd("DEL")
-            .arg(spec.redis_key)
-            .query_async(&mut *redis_conn)
-            .await?;
-        return Ok(());
-    }
+    // if rows.is_empty() {
+    //     info!("postgres table empty. wiping live key \"{}\" and exiting", spec.redis_key);
+    //     let _: () = redis::cmd("DEL").arg(spec.redis_key).query_async(&mut *redis_conn).await?;
+    //     return Ok(());
+    // }
 
     let mut pipe = redis::pipe();
-    pipe.atomic(); // Guarantees the DEL and subsequent HSETs happen in one isolated tick
 
-    // Wiping the hash first ensures deleted Postgres records are purged from Redis
-    pipe.cmd("DEL").arg(spec.redis_key).ignore();
+    let temp_key = format!("{}_temp", spec.redis_key);
+    // // clean up any left-over temporary key from a previous failed run
+    // pipe.cmd("DEL").arg(&temp_key).ignore();
 
     let mut skipped = 0;
     let mut queued_writes = 0;
@@ -91,7 +85,7 @@ async fn sync_table_to_redis<T: Serialize>(
         let (id_str, entity_data) = match (spec.parse_row)(&row) {
             Ok(res) => res,
             Err(err) => {
-                error!("Skipping row: {}", err);
+                error!("couldn't parse row: {}", err);
                 skipped += 1;
                 continue;
             }
@@ -101,7 +95,7 @@ async fn sync_table_to_redis<T: Serialize>(
             Ok(j) => j,
             Err(err) => {
                 error!(
-                    "Failed to serialize {} {}: {}",
+                    "couldn't serialize {} {}: {}",
                     spec.entity_name, id_str, err
                 );
                 skipped += 1;
@@ -109,8 +103,9 @@ async fn sync_table_to_redis<T: Serialize>(
             }
         };
 
+        // write to the temp key
         pipe.cmd("HSET")
-            .arg(spec.redis_key)
+            .arg(&temp_key)
             .arg(id_str)
             .arg(json_str)
             .ignore();
@@ -119,22 +114,28 @@ async fn sync_table_to_redis<T: Serialize>(
     }
 
     if queued_writes > 0 {
+        // overwrite the live key instantly and atomically with the temporary key
+        pipe.cmd("RENAME")
+            .arg(&temp_key)
+            .arg(spec.redis_key)
+            .ignore();
+
+        debug!("sending pipeline to redis for {}...", spec.entity_name);
         let _: () = pipe.query_async(&mut *redis_conn).await?;
+
         if skipped > 0 {
             warn!("skipped {} unparseable {} rows", skipped, spec.entity_name);
         }
         info!(
-            "atomically wrote {} {} to redis key \"{}\"",
-            queued_writes, spec.entity_name, spec.redis_key
+            "successfully wrote redis key \"{}\" with {} records",
+            spec.redis_key, queued_writes
         );
     } else {
-        warn!("no valid {} rows were queued for redis", spec.entity_name);
+        warn!("no valid {} rows were found to write", spec.entity_name);
     }
 
     Ok(())
 }
-
-// --- Safe Row-Extraction Helpers ---
 
 fn get_opt_str(row: &tokio_postgres::Row, idx: usize) -> Result<String, String> {
     row.try_get::<usize, Option<String>>(idx)
@@ -147,8 +148,6 @@ fn get_opt_vec_str(row: &tokio_postgres::Row, idx: usize) -> Result<Vec<String>,
         .map(|opt| opt.unwrap_or_default())
         .map_err(|e| format!("failed to read string array at col {idx}: {e}"))
 }
-
-// --- Implementations ---
 
 #[derive(Serialize)]
 struct User {
