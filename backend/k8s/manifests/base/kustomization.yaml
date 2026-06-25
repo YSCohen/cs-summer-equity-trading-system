@@ -12,11 +12,28 @@ resources:
   # 3. Data Layer
   - data-layer/postgres
   - data-layer/redis
+  - data-layer/pgbouncer
 
   # 4. Applications Layer
+  - apps/error-pages
   - apps/fastapi
   - apps/locust
   - apps/streamlit
+  - apps/adminer
   - apps/trade-writer
-  - apps/error-pages
   - apps/db-syncer
+
+configMapGenerator:
+  - name: db-routing
+    namespace: data
+    envs:
+      - shared-config/db-routing.env
+    options:
+      disableNameSuffixHash: true
+
+  - name: db-routing
+    namespace: backend
+    envs:
+      - shared-config/db-routing.env
+    options:
+      disableNameSuffixHash: true

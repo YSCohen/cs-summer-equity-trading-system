@@ -10,7 +10,7 @@
 # for testing the trade writer. sends trades to redis
 
 import asyncio
-# import itertools
+import itertools, string
 import os
 import random
 import time
@@ -23,36 +23,36 @@ import redis.asyncio as aioredis
 
 # # AAA, AAB, ..., ZZY, ZZZ
 # # 17_576 combinations
-# TICKERS = ["".join(c) for c in itertools.product(string.ascii_uppercase, repeat=3)]
+TICKERS = ["".join(c) for c in itertools.product(string.ascii_uppercase, repeat=3)]
 
-TICKERS = [
-    "AAA",
-    "BBB",
-    "CCC",
-    "DDD",
-    "EEE",
-    "FFF",
-    "GGG",
-    "HHH",
-    "III",
-    "JJJ",
-    "KKK",
-    "LLL",
-    "MMM",
-    "NNN",
-    "OOO",
-    "PPP",
-    "QQQ",
-    "RRR",
-    "SSS",
-    "TTT",
-    "UUU",
-    "VVV",
-    "WWW",
-    "XXX",
-    "YYY",
-    "ZZZ",
-]
+# TICKERS = [
+#     "AAA",
+#     "BBB",
+#     "CCC",
+#     "DDD",
+#     "EEE",
+#     "FFF",
+#     "GGG",
+#     "HHH",
+#     "III",
+#     "JJJ",
+#     "KKK",
+#     "LLL",
+#     "MMM",
+#     "NNN",
+#     "OOO",
+#     "PPP",
+#     "QQQ",
+#     "RRR",
+#     "SSS",
+#     "TTT",
+#     "UUU",
+#     "VVV",
+#     "WWW",
+#     "XXX",
+#     "YYY",
+#     "ZZZ",
+# ]
 
 redis_client = aioredis.Redis(host=os.getenv("REDIS_HOST", "localhost"))
 

@@ -7,6 +7,22 @@ resources:
 
 patches:
   - target:
+      kind: Deployment
+      name: fastapi-api
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: fastapi-api
+      spec:
+        template:
+          spec:
+            containers:
+              - name: fastapi
+                env:
+                  - name: ENVIRONMENT
+                    value: "dev-max"
+  - target:
       kind: HelmRelease
       name: loki-stack
     patch: |-
@@ -20,4 +36,14 @@ patches:
             server:
               global:
                 scrape_interval: 15s
-
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: fastapi-hpa
+    patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: fastapi-hpa
+      spec:
+        maxReplicas: 6 # Max's custom pod limit
+        # minReplicas: 1 # He can also override the minimum here if he wants!

@@ -8,6 +8,7 @@
 # ///
 
 import asyncio
+from datetime import datetime
 
 import accounts
 import positions
@@ -19,3 +20,6 @@ if __name__ == "__main__":
     asyncio.run(users.make_fake_users())
     asyncio.run(accounts.make_fake_accounts())
     asyncio.run(positions.make_fake_positions())
+    
+    # Record completion time
+    print(f"🏁 Test suite finished at: {datetime.now().isoformat()}")

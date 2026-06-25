@@ -1,0 +1,21 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adminer-autologin
+data:
+  index.php: |
+    <?php
+    // Only inject the login payload if we are not already authenticated/redirected.
+    // Adminer adds the username to the GET parameters after successful login.
+    if (!isset($_GET['username'])) {
+        $_POST['auth']['driver'] = 'pgsql';
+        $_POST['auth']['server'] = 'postgres.data.svc.cluster.local';
+        $_POST['auth']['username'] = getenv('POSTGRES_USER');
+        $_POST['auth']['password'] = getenv('POSTGRES_PASSWORD');
+        $_POST['auth']['db'] = 'trading';
+    }
+
+    // Load the actual Adminer core
+    require('adminer.php');
+    ?>
