@@ -87,12 +87,12 @@ echo "✅ Socket: $ACTUAL_SOCK"
 # ============================================================
 # Sanity check
 # ============================================================
-if [ ! -d "$PROJECT_ROOT/backend/k8s" ]; then
-    echo "❌ ERROR: 'backend/k8s' not found. Are you running from the repo root?"
+if [ ! -d "$PROJECT_ROOT/k8s" ]; then
+    echo "❌ ERROR: 'k8s' not found. Are you running from the repo root?"
     exit 1
 fi
 
-cd "$PROJECT_ROOT/backend/k8s"
+cd "$PROJECT_ROOT/k8s"
 echo "DOCKER_HOST_PATH=$ACTUAL_SOCK" >.env
 
 # ============================================================
@@ -125,7 +125,7 @@ echo "🚀 Creating cluster (bootstrapping Flux controllers)..."
 
 # Use --no-host-dns to stop K3d from touching /etc/resolv.conf
 $ENGINE exec -e HOST_ROOT="$PROJECT_ROOT" -i k8s-toolbox \
-    k3d cluster create --config backend/k8s/k3d-config.yaml \
+    k3d cluster create --config k8s/k3d-config.yaml \
     --k3s-arg "--resolv-conf=/tmp/custom-resolv.conf@server:*" \
     --k3s-arg "--resolv-conf=/tmp/custom-resolv.conf@agent:*"
 
@@ -172,7 +172,7 @@ echo "📦 Bootstrapping Flux Controllers (Declarative Kustomize)..."
 
 # Apply the 4-line kustomization.yaml file directly from your repo.
 # Kubernetes will automatically download the required images in the background!
-$ENGINE exec -i k8s-toolbox kubectl apply -k "backend/k8s/flux-system"
+$ENGINE exec -i k8s-toolbox kubectl apply -k "k8s/flux-system"
 
 # Wait for Flux CRDs to be established before we apply targets
 echo "⏳ Waiting for Flux CRDs to initialize..."
@@ -187,7 +187,7 @@ echo "✅ Flux CRDs are ready."
 # ============================================================
 echo "🔄 Applying target: $TARGET_FILE"
 $ENGINE exec -i k8s-toolbox \
-    kubectl apply -f "backend/k8s/flux-system/targets/$TARGET_FILE"
+    kubectl apply -f "k8s/flux-system/targets/$TARGET_FILE"
 
 # ============================================================
 # Force an immediate reconciliation so we don't wait 1 minute

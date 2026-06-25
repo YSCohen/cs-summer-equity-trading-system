@@ -2,11 +2,11 @@
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
-  name: main-repo
+  name: dev-repo-max
   namespace: flux-system
 spec:
   interval: 1m
-  url: https://github.com/SM26-Industrial-Software-Dev/equity-trading-system
+  url: https://github.com/maxrabz/equity-trading-system.git
   ref:
     branch: main
 ---
@@ -19,6 +19,6 @@ spec:
   interval: 1m
   sourceRef:
     kind: GitRepository
-    name: main-repo
-  path: ./backend/k8s/manifests/overlays/upstream # Points to Upstream overlay!
+    name: dev-repo-max
+  path: ./k8s/manifests/overlays/dev-max # Points to Max's overlay!
   prune: true

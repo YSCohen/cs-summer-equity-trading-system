@@ -19,7 +19,7 @@ env:
 
 volumes:
   # Mount to /tmp to avoid conflict with the system /etc/resolv.conf
-  - volume: ${HOST_ROOT}/backend/k8s/custom-resolv.conf:/tmp/custom-resolv.conf:z
+  - volume: ${HOST_ROOT}/k8s/custom-resolv.conf:/tmp/custom-resolv.conf:z
     nodeFilters:
       - "server:*"
       - "agent:*"

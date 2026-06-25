@@ -6,11 +6,11 @@ HOST_ROOT := $(shell pwd)
 export HOST_ROOT
 
 # Include all of our modular Make targets
-include backend/k8s/make/cluster.mk
-include backend/k8s/make/status.mk
-include backend/k8s/make/debug.mk
-include backend/k8s/make/chaos.mk
-include backend/k8s/make/logs.mk
+include k8s/make/cluster.mk
+include k8s/make/status.mk
+include k8s/make/debug.mk
+include k8s/make/chaos.mk
+include k8s/make/logs.mk
 
 # ==========================================
 # 🆘 HELP MENU

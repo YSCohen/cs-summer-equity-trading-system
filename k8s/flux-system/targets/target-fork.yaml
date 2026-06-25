@@ -20,5 +20,5 @@ spec:
   sourceRef:
     kind: GitRepository
     name: dev-repo
-  path: ./backend/k8s/manifests/overlays/dev-sean # Points to your overlay!
+  path: ./k8s/manifests/overlays/dev-sean # Points to your overlay!
   prune: true

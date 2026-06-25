@@ -3,10 +3,10 @@
 # ==========================================
 
 toolbox-up: ## Start the containerized k8s-toolbox
-	@cd backend/k8s && $(DOCKER) compose up -d --build
+	@cd k8s && $(DOCKER) compose up -d --build
 
 toolbox-down: ## Tear down the k8s-toolbox
-	@cd backend/k8s && $(DOCKER) compose down
+	@cd k8s && $(DOCKER) compose down
 
 cluster-up: ## Deploy from UPSTREAM (production-like)
 	@echo "🚀 Deploying from UPSTREAM (production-like)..."

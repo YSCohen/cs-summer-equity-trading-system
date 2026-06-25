@@ -52,7 +52,7 @@ redis-cli: ## 🔴 Connecting to Redis CLI...
 
 seed-all: ## 🌱 Spawning temporary pod to inject all test data (trades, users, accounts, positions)...
 	@echo "🌱 Injecting full test data suite..."
-	@cd backend/DB/redis-postgres-syncers/test && \
+	@cd db/redis-postgres-syncers/test && \
 	tar cf - . | $(DOCKER) exec -i k8s-toolbox kubectl run data-seeder --rm -i -n backend \
 		--image=ghcr.io/astral-sh/uv:alpine \
 		--env="REDIS_HOST=redis.data.svc.cluster.local" \

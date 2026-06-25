@@ -29,7 +29,7 @@ echo "✅ Container engine: $ENGINE"
 
 # 2. Recreate the ConfigMap by piping the local Python file into the toolbox
 echo "📦 Updating ConfigMap 'locust-config'..."
-cat "$PROJECT_ROOT/backend/Locust/locustfile.py" |
+cat "$PROJECT_ROOT/locust/locustfile.py" |
     $ENGINE exec -i k8s-toolbox sh -c 'kubectl create configmap locust-config --from-file=locustfile.py=/dev/stdin -o yaml --dry-run=client | kubectl apply -f -'
 
 # 3. Force the Locust deployment to restart and pick up the new configuration

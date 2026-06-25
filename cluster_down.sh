@@ -27,7 +27,7 @@ fi
 echo "✅ Container engine: $ENGINE"
 
 # 3. Navigate to K8s directory
-cd "$PROJECT_ROOT/backend/k8s"
+cd "$PROJECT_ROOT/k8s"
 
 # 4. Tear down the cluster using the toolbox
 echo "🧹 Destroying K3d cluster..."

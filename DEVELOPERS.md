@@ -77,7 +77,7 @@ Locust is deployed via our GitOps pipeline and is strictly maintained at 1 repli
 
 To update and test your load-testing scripts locally without conflicting with Flux, utilize the provided deployment script:
 
-1. **Modify the Script:** Make your required changes to `backend/Locust/locustfile.py`.
+1. **Modify the Script:** Make your required changes to `locust/locustfile.py`.
 2. **Execute the Reload Script:** From the repository root, run:
 
     ```bash
