@@ -13,7 +13,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_PREFIX: ${{ github.repository }}
+  IMAGE_NAME_PREFIX: ${{ github.repository | downcase }}
 
 jobs:
   # ==========================================
@@ -66,6 +66,14 @@ jobs:
           tags: |
             type=raw,value=latest-amd64,enable={{is_default_branch}}
             type=sha,prefix=sha-,suffix=-amd64,format=short
+
+      - name: Debug Variables
+        run: |
+          echo "Full Repository Path: ${{ github.repository }}"
+          echo "Component: ${{ matrix.component }}"
+          BASE_IMG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.component }}"
+          echo "Constructed Path: $BASE_IMG"
+          echo "Lowercase Path: $(echo $BASE_IMG | tr '[:upper:]' '[:lower:]')"
 
       - name: Build and push AMD64
         uses: docker/build-push-action@v5
@@ -178,7 +186,8 @@ jobs:
       - name: Create Multi-Arch Manifest
         run: |
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          BASE_IMG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.component }}"
+          # Force the entire BASE_IMG path to lowercase here, as an extra safety measure
+          BASE_IMG=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.component }}" | tr '[:upper:]' '[:lower:]')
 
           docker buildx imagetools create \
             -t $BASE_IMG:latest \
