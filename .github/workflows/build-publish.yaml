@@ -73,8 +73,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: |
-            ${{ github.event_name != 'pull_request' && 
-                github.repository == 'YOUR_ORGANIZATION_NAME/equity-trading-system' }}
+            ${{ github.event_name != 'pull_request' &&
+                github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.component }}-amd64
@@ -119,8 +119,8 @@ jobs:
 
       - name: Log in to the Container registry
         if: |
-          github.event_name != 'pull_request' && 
-          github.repository == 'YOUR_ORGANIZATION_NAME/equity-trading-system'
+          github.event_name != 'pull_request' &&
+          github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -144,8 +144,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/arm64
           push: |
-            ${{ github.event_name != 'pull_request' && 
-                github.repository == 'YOUR_ORGANIZATION_NAME/equity-trading-system' }}
+            ${{ github.event_name != 'pull_request' &&
+                github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.component }}-arm64
@@ -162,8 +162,8 @@ jobs:
 
     # Only run the merge job if we actually pushed the images to the main repo
     if: |
-      github.event_name != 'pull_request' && 
-      github.repository == 'YOUR_ORGANIZATION_NAME/equity-trading-system'
+      github.event_name != 'pull_request' &&
+      github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
 
     permissions:
       contents: read
