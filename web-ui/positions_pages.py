@@ -9,6 +9,7 @@ from api_client import (
     get_positions_by_account_and_ticker,
 )
 from account_picker import account_select, get_account_name
+from market_data import get_current_price
 
 
 def _format_timestamp(value):
@@ -23,13 +24,28 @@ def _format_timestamp(value):
 
 
 def _position_card(position, account_id=None):
+    ticker = position.get("symbol_ticker")
+    quantity = position.get("quantity")
+    price = get_current_price(ticker)
+
     with st.container(border=True):
-        cols = st.columns([2, 2, 2, 3])
-        cols[0].write(f"**{position.get('symbol_ticker', '—')}**")
-        cols[1].write(f"Qty: {position.get('quantity', '—')}")
+        cols = st.columns([2, 2, 2, 2, 3])
+        cols[0].write(f"**{ticker or '—'}**")
+        cols[1].write(f"Qty: {quantity if quantity is not None else '—'}")
+
+        if price is not None:
+            cols[2].metric("Price/Share", f"${price:,.2f}")
+            if quantity is not None:
+                cols[3].metric("Total Value", f"${price * quantity:,.2f}")
+            else:
+                cols[3].caption("Total Value: —")
+        else:
+            cols[2].caption("Price/Share: unavailable")
+            cols[3].caption("Total Value: unavailable")
+
         if account_id:
-            cols[2].caption(f"Account: {get_account_name(account_id)}")
-        cols[3].caption(f"Updated {_format_timestamp(position.get('updated_at'))}")
+            cols[4].caption(f"Account: {get_account_name(account_id)}")
+        cols[4].caption(f"Updated {_format_timestamp(position.get('updated_at'))}")
 
 
 def _render_positions_result(result, empty_message="No positions found.", account_id=None):

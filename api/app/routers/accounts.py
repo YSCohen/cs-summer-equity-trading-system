@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends
 from app.core.logging import logger
 from app.core.security import verify_cookie
+from app.models.edit_account_details_models import Details
 from app.services.account_services import (
     create_new_account,
     add_account_to_user,
     get_all_users_accounts,
+    change_account_short_perms,
 )
 
 router = APIRouter(tags=["Accounts"])
@@ -21,13 +23,24 @@ async def create_account(
     return {"message": "Account created", "account_id": f"{account_id}"}
 
 
-@router.post("/users/accounts/{account_id}")
+@router.post("/users/add_account/{account_id}")
 async def add_account(account_id: str, user_id: str = Depends(verify_cookie)):
     logger.info("Recieved new account sync to user request")
 
     username = await add_account_to_user(account_id, user_id)
 
     return {"message": f"Account added to user {username}"}
+
+
+@router.put("/users/update_account_details/{account_id}")
+async def change_short_perms(
+    account_id: str, request: Details, user_id: str = Depends(verify_cookie)
+):
+    logger.info("Recieved new short change request")
+
+    await change_account_short_perms(account_id, user_id = user_id, account_name = request.account_name, can_short = request.can_short)
+
+    return {"message": "Perms changed"}
 
 
 @router.get("/users/allaccounts")

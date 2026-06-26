@@ -45,5 +45,5 @@ patches:
       metadata:
         name: fastapi-hpa
       spec:
-        maxReplicas: 6 # Max's custom pod limit
-        # minReplicas: 1 # He can also override the minimum here if he wants!
+        maxReplicas: 20 # Max's custom pod limit
+        minReplicas: 10 # He can also override the minimum here if he wants!

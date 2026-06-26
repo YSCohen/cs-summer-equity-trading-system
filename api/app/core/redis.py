@@ -11,4 +11,5 @@ redis_dictionaries = [
     "users",
     "accounts",
     "positions",
+    "username"
 ]  # redis dicts TODO update these tables once agrred upon naming convention

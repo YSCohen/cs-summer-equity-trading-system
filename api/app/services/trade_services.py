@@ -78,29 +78,29 @@ async def individual_trade(user_id: str, trade: dict):
     packed_bytes = msgpack.packb(payload)
 
     lock = redis_client.lock(
-        f"position:{trade['account_id']}:{trade['ticker']}", timeout=5
+        f"position:{trade['account_id']}:{trade['ticker']}", timeout=30
     )
 
     async with lock:
-        # Grab all positions for editing
-        raw_positions = await redis_client.hgetall(redis_dictionaries[2])
-        position_key = None
         new_position = None
+        pipe = redis_client.pipeline()
 
-        positions = {
-            key.decode() if isinstance(key, bytes) else key: json.loads(value)
-            for key, value in raw_positions.items()
-        }  # Turn all positions into valid dictionaries and not bytes
+        for position_uuid in account_data["positions"]:
+            pipe.hget(redis_dictionaries[2], position_uuid)
 
-        for key, x in positions.items():
+        results = await pipe.execute()
+
+        for position_uuid, raw_position in zip(account_data["positions"], results):
+            if raw_position is None:
+                continue
+            real_position_data = json.loads(raw_position)
             if (
-                x["account_id"] == trade["account_id"]
-                and x["symbol_ticker"] == trade["ticker"]
+                real_position_data["symbol_ticker"] == trade["ticker"]
             ):  # Correct account and ticker
-                position_key = key  # Grab the key of the position to edit
+                position_key = position_uuid
                 if (
                     trade["direction"] == "Sell"
-                    and x["quantity"] - trade["quantity"] < 0
+                    and real_position_data["quantity"] - trade["quantity"] < 0
                     and not account_data["can_short"]
                 ):  # Check if trying to short
                     logger.warning("Invalid short attempt")
@@ -108,9 +108,9 @@ async def individual_trade(user_id: str, trade: dict):
                         status_code=403, detail="You do not have permission to short"
                     )
                 new_position = (
-                    x["quantity"] + trade["quantity"]
+                    real_position_data["quantity"] + trade["quantity"]
                     if trade["direction"] == "Buy"
-                    else x["quantity"] - trade["quantity"]
+                    else real_position_data["quantity"] - trade["quantity"]
                 )  # Save what the new position will be
 
                 break  # only one account and one ticker
@@ -136,6 +136,11 @@ async def individual_trade(user_id: str, trade: dict):
             }
             await redis_client.hset(  # Set the new position
                 redis_dictionaries[2], position_key, json.dumps(position_data)
+            )
+            account_data["positions"].append(position_key)
+            account_data["updated_at"] = now_str
+            await redis_client.hset(
+                redis_dictionaries[1], trade["account_id"], json.dumps(account_data)
             )
             logger.info("Created new position for account")
         else:  # Editing existing position

@@ -102,18 +102,25 @@ else:
 
     page_keys = list(page_options.keys())
 
+
+    def sync_nav_to_url():
+        st.query_params["page"] = st.session_state.nav_page
+
+
+    if "nav_page" not in st.session_state or st.session_state.nav_page not in page_options:
+        st.session_state.nav_page = current_page_key
+
     st.sidebar.markdown("**Navigate**")
-    selected_page_key = st.sidebar.radio(
+    st.sidebar.radio(
         "Page",
         page_keys,
         format_func=lambda key: page_options[key][0],
-        index=page_keys.index(current_page_key),
+        key="nav_page",
+        on_change=sync_nav_to_url,
         label_visibility="collapsed",
     )
 
-    st.query_params["page"] = selected_page_key
-
-    page = page_options[selected_page_key][1]
+    page = page_options[st.session_state.nav_page][1]
 
     PAGE_RENDERERS = {
         "Enter Trade": render_enter_trade_page,

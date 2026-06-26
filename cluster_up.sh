@@ -11,6 +11,43 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export HOST_ROOT="$PROJECT_ROOT"
 
 # ============================================================
+# systemd-resolved Pre-Flight Check (Excluding Ubuntu)
+# ============================================================
+
+OS_ID="unknown"
+if [ -f /etc/os-release ]; then
+    # Source the OS release file safely
+    . /etc/os-release
+    OS_ID="${ID:-unknown}"
+fi
+
+# Trigger ONLY if resolvectl exists AND the OS is NOT Ubuntu
+if command -v resolvectl >/dev/null 2>&1 && [[ "$OS_ID" != "ubuntu" ]]; then
+    echo ""
+    echo "🌐 SYSTEMD-RESOLVED DETECTED"
+    echo "----------------------------------------------------------"
+    echo "⚠️  WARNING: Your host uses systemd-resolved (127.0.0.53)."
+    echo "   If you are using Docker, this local stub often breaks"
+    echo "   container DNS resolution, causing them to lose internet."
+    echo ""
+    echo "   To prevent this, please ensure your /etc/docker/daemon.json"
+    echo "   is configured to bypass the local stub with upstream servers:"
+    echo '   {'
+    echo '     "dns": ["1.0.0.1", "1.1.1.1"]'
+    echo '   }'
+    echo "   (Remember to run 'sudo systemctl restart docker' after updating)"
+    echo "----------------------------------------------------------"
+    
+    read -p "❓ Have you verified your container DNS configuration? (y/N): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "❌ Exiting. Please update your DNS settings and run this script again."
+        exit 1
+    fi
+    echo "✅ DNS configuration confirmed. Proceeding..."
+    echo ""
+fi
+
+# ============================================================
 # Flag parsing — default to upstream if no flag is given
 # ============================================================
 REPO_NAME="main-repo"

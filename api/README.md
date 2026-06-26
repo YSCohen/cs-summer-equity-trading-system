@@ -24,5 +24,4 @@ Current Features:
 
 All of these also verify your cookie and write to redis and read from postgres as appopriate
 
-The api is dependent on a postgres being up and running to even run in the first place. Additionally redis must be up to not get an error from every endpoint
-- Recommended to use a docker compose to run the api. See the one in this folder as an example of what it should look like 
+The api is dependent on a postgres, redis, and the logging system to be up first in order for it to run.

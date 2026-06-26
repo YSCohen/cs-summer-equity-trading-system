@@ -9,17 +9,11 @@ from app.core.logging import logger
 
 async def register_valid_user(username: str, password: str):
     # Check if the username already exists in Redis
-    all_user_ids = await redis_client.hgetall(redis_dictionaries[0])
+    old_uuid = await redis_client.hget(redis_dictionaries[3], username)
 
-    positions = {
-        key.decode() if isinstance(key, bytes) else key: json.loads(value)
-        for key, value in all_user_ids.items()
-    }  # Turn all positions into valid dictionaries and not bytes
-
-    for user in positions.values():
-        if username == user["username"]:
-            logger.warning("Pre-existing username was used")
-            raise HTTPException(status_code=409, detail="Username already exists")
+    if old_uuid:
+        logger.warning("Pre-existing username was used")
+        raise HTTPException(status_code=409, detail="Username already exists")
 
     # Create new User data
     user_id = str(uuid.uuid4())
@@ -34,31 +28,25 @@ async def register_valid_user(username: str, password: str):
     }
     # send new User to redis
     await redis_client.hset(redis_dictionaries[0], user_id, json.dumps(user_data))
+    await redis_client.hset(redis_dictionaries[3], username, user_id)
 
     return user_id
 
 
 async def login_valid_user(username: str, password: str):
     # Get the User data from redis
-    all_user_ids = await redis_client.hgetall(redis_dictionaries[0])
+    old_uuid = await redis_client.hget(redis_dictionaries[3], username)
 
-    positions = {
-        key.decode() if isinstance(key, bytes) else key: json.loads(value)
-        for key, value in all_user_ids.items()
-    }  # Turn all positions into valid dictionaries and not bytes
-
-    valid = False
-    id = None
-
-    for user_id, user in positions.items():
-        if username == user["username"] and pwd_context.verify(
-            password, user["oauth_key"]
-        ):
-            valid = True
-            id = user_id
-
-    if not valid:  # No such user exists or wrong password
+    if not old_uuid:
         logger.warning("Invalid login attempt")
         raise HTTPException(status_code=401, detail="Wrong Username or Password")
 
-    return id
+    old_uuid = old_uuid.decode() if isinstance(old_uuid, bytes) else old_uuid
+    
+    raw_user_data = await redis_client.hget(redis_dictionaries[0], old_uuid)
+    real_user_data = json.loads(raw_user_data)
+    if not pwd_context.verify(password, real_user_data["oauth_key"]):
+        logger.warning("Invalid login attempt")
+        raise HTTPException(status_code=401, detail="Wrong Username or Password")
+
+    return old_uuid
