@@ -2,11 +2,11 @@
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
-  name: dev-repo
+  name: dev-repo-will
   namespace: flux-system
 spec:
   interval: 1m
-  url: https://github.com/thegreatestgiant/equity-trading-system.git # (Your Fork URL)
+  url: https://github.com/WilliamTrump/equity-trading-system
   ref:
     branch: main
 ---
@@ -19,6 +19,6 @@ spec:
   interval: 1m
   sourceRef:
     kind: GitRepository
-    name: dev-repo
-  path: ./k8s/manifests/overlays/dev-sean # Points to your overlay!
+    name: dev-repo-yehuda
+  path: ./k8s/manifests/overlays/dev-will
   prune: true

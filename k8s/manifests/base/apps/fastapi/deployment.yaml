@@ -28,7 +28,7 @@ spec:
               echo "Database is online! Proceeding with FastAPI startup."
       containers:
         - name: fastapi
-          image: ghcr.io/maxrabz/fastapi:working
+          image: api-image
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
@@ -52,6 +52,13 @@ spec:
                   fieldPath: status.podIP
             - name: ENVIRONMENT
               value: "base"
+
+            - name: REDIS_MAX_PODS
+              value: "20"
+            - name: REDIS_SERVER_MAX_CLIENTS
+              value: "10000"
+            - name: ROLLOUT_SURGE_PCT
+              value: "25"
             - name: REDIS_HOST
               value: "redis.data.svc.cluster.local"
             - name: REDIS_PORT

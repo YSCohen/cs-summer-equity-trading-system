@@ -32,4 +32,4 @@ patches:
               - name: fastapi
                 env:
                   - name: ENVIRONMENT
-                    value: "dev-yehuda"
+                    value: "dev-will"

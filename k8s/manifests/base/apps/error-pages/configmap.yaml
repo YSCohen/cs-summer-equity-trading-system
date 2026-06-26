@@ -7,30 +7,30 @@ metadata:
     app: error-page
 data:
   index.html: |
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Pod Crash | Equity Trading</title>
-        <style>
-            body { background-color: #f0f4f8; color: #334e68; font-family: system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; }
-            .spinner { width: 50px; height: 50px; border: 5px solid #d9e2ec; border-top-color: #3273dc; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-            @keyframes spin { to { transform: rotate(360deg); } }
-            .container { max-width: 600px; padding: 20px; }
-            .highlight { color: #3273dc; font-weight: bold; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="spinner"></div>
-            <h1>Spawning New Pods...</h1>
-            <p>The Equity Trading interface is currently unavailable.</p>
-            <p>Our Kubernetes auto-healing is doing its magic right now. Assuming we haven't run out of cloud credits, we'll be back shortly.</p>
-            <p style="font-size: 0.85rem; margin-top: 30px;"><i>Psst... If anyone from the YU Comp Sci department is reading this, please send funds. K8s isn't cheap!</i></p>
-        </div>
-    </body>
-    </html>
+        <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <title>404</title>
+              <style>
+                  body {
+                      background-color: black;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
+                      height: 100vh;
+                      margin: 0;
+                  }
+                  img {
+                      max-width: 100%;
+                      max-height: 100%;
+                  }
+              </style>
+          </head>
+          <body>
+              <img src="https://imgs.xkcd.com/comics/not_available.png" alt="xkcd Not Available">
+          </body>
+          </html>
   default.conf: |
     server {
         listen 8080;

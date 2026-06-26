@@ -14,18 +14,6 @@ spec:
         app: db-syncer
     spec:
       initContainers:
-        - name: wait-for-loki
-          image: busybox:1.36
-          command:
-            - sh
-            - -c
-            - |
-              echo "Waiting for Loki to become reachable..."
-              until nc -z loki-stack.monitoring.svc.cluster.local 3100; do
-                echo "Loki not ready. Sleeping 2 seconds..."
-                sleep 2
-              done
-              echo "Loki is online!"
         - name: wait-for-db
           image: busybox:1.36
           command:
@@ -37,10 +25,22 @@ spec:
                 echo "Database not ready. Sleeping 2 seconds..."
                 sleep 2
               done
-              echo "Database is online! Proceeding with db-syncer startup."
+              echo "Database is online!"
+        - name: wait-for-loki
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Loki to become reachable..."
+              until nc -z loki-stack.monitoring.svc.cluster.local 3100; do
+                echo "Loki not ready. Sleeping 2 seconds..."
+                sleep 2
+              done
+              echo "Loki is online! Proceeding with db-syncer startup."
       containers:
         - name: db-syncer
-          image: ghcr.io/yscohen/db-syncer:latest
+          image: db-syncer-image
           imagePullPolicy: Always
           env:
             - name: POSTGRES_USER

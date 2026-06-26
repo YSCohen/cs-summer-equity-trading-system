@@ -5,6 +5,17 @@ kind: Kustomization
 resources:
   - ../../base
 
+# images:
+#   - name: api-image
+#     newName: ghcr.io/maxrabz/fastapi
+#   # newTag: working
+#   - name: web-ui-image
+#     newName: ghcr.io/williamtrump/equity-trading-frontend
+#   - name: db-syncer-image
+#     newName: ghcr.io/yscohen/db-syncer
+#   - name: trade-writer-image
+#     newName: ghcr.io/yscohen/trade-writer
+
 patches:
   - target:
       kind: Deployment
