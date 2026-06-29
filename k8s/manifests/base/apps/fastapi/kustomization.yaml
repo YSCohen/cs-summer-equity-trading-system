@@ -9,3 +9,17 @@ resources:
   - hpa.yaml
   - service.yaml
   - ingress.yaml
+
+replacements:
+  - source:
+      kind: Deployment
+      name: fastapi-api
+      # This grabs the final image string from the container
+      fieldPath: spec.template.spec.containers.[name=fastapi].image
+    targets:
+      - select:
+          kind: Deployment
+          name: fastapi-api
+        # This pastes it into the environment variable we just created
+        fieldPaths:
+          - spec.template.spec.containers.[name=fastapi].env.[name=CURRENT_IMAGE].value
