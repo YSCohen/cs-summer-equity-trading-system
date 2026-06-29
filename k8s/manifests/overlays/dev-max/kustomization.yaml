@@ -6,15 +6,15 @@ resources:
   - ../../base
 
 images:
-  - name: ghcr.io/sm26-industrial-software-dev/api
-    newName: ghcr.io/maxrabz/fastapi
-    newTag: latest
-  - name: ghcr.io/sm26-industrial-software-dev/web-ui
-    newName: ghcr.io/williamtrump/equity-trading-frontend
-  - name: ghcr.io/sm26-industrial-software-dev/db-syncer
-    newName: ghcr.io/yscohen/db-syncer
-  - name: ghcr.io/sm26-industrial-software-dev/trade-writer
-    newName: ghcr.io/yscohen/trade-writer
+  # - name: ghcr.io/sm26-industrial-software-dev/api
+  #   newName: ghcr.io/maxrabz/fastapi
+  # # newTag: working
+  # - name: ghcr.io/sm26-industrial-software-dev/web-ui
+  #   newName: ghcr.io/williamtrump/equity-trading-frontend
+  # - name: ghcr.io/sm26-industrial-software-dev/db-syncer
+  #   newName: ghcr.io/yscohen/db-syncer
+  # - name: ghcr.io/sm26-industrial-software-dev/trade-writer
+  #   newName: ghcr.io/yscohen/trade-writer
 
 patches:
   - target:
