@@ -7,6 +7,10 @@ from app.core.logging import logger
 async def get_all_users_positions(user_id: str):
     # Get User data to check their accounts
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    if raw_user is None:
+        raise HTTPException(
+            status_code=503, detail="The database has crashed, try again later"
+        )
     user_data = json.loads(raw_user)
 
     pipe = redis_client.pipeline()
@@ -66,6 +70,10 @@ async def get_all_users_positions(user_id: str):
 async def get_all_accounts_positions(account_id: str, user_id: str):
     # Get User data
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    if raw_user is None:
+        raise HTTPException(
+            status_code=503, detail="The database has crashed, try again later"
+        )
     user_data = json.loads(raw_user)
 
     # Confirm it's your account
@@ -100,6 +108,10 @@ async def get_all_accounts_positions(account_id: str, user_id: str):
 async def get_all_users_ticker_positions(ticker: str, user_id: str):
     # Get User data
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    if raw_user is None:
+        raise HTTPException(
+            status_code=503, detail="The database has crashed, try again later"
+        )
     user_data = json.loads(raw_user)
 
     pipe = redis_client.pipeline()
@@ -148,6 +160,10 @@ async def get_all_users_ticker_positions(ticker: str, user_id: str):
 async def get_account_ticker_position(ticker: str, account_id: str, user_id: str):
     # Grab User data
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    if raw_user is None:
+        raise HTTPException(
+            status_code=503, detail="The database has crashed, try again later"
+        )
     user_data = json.loads(raw_user)
 
     # Confirm you have access to this account
