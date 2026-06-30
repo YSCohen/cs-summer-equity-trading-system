@@ -48,6 +48,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         update_all_cached_prices(&mut redis_conn).await?;
+        info!("updated all cached prices");
 
         tokio::select! {
             () = tokio::time::sleep(std::time::Duration::from_secs(interval)) => {}
@@ -65,12 +66,15 @@ async fn update_all_cached_prices(
     let mut pipe = redis::pipe();
 
     let sp500_symbols = fetch_sp500_symbols().await?;
+
     for symbol in sp500_symbols {
         let quote = get_quote_json(&symbol).await?;
         pipe.hset("market_prices", &symbol, &quote);
     }
+    debug!("wrote quotes for all symbols to pipe...");
 
     pipe.query_async::<()>(redis_conn).await?;
+    debug!("executed pipe");
 
     Ok(())
 }
@@ -100,7 +104,8 @@ async fn get_quote_json(symbol: &str) -> Result<String, Box<dyn Error>> {
         timestamp: Timestamp::from_second(last_quote.timestamp as i64)?.to_string(),
     };
 
-    Ok(serde_json::to_string(&data)?)
+    Ok(serde_json::to_string_pretty(&data)?)
+    // Ok(serde_json::to_string(&data)?)
 }
 
 #[derive(Debug, Deserialize)]
@@ -110,6 +115,8 @@ struct Record {
 }
 
 async fn fetch_sp500_symbols() -> Result<Vec<String>, Box<dyn Error>> {
+    debug!("fetching S&P 500 symbol list...");
+
     let url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv";
     let response = reqwest::get(url).await?.text().await?;
 
@@ -123,5 +130,6 @@ async fn fetch_sp500_symbols() -> Result<Vec<String>, Box<dyn Error>> {
         symbols.push(formatted_symbol);
     }
 
+    debug!("successfully retrieved S&P 500 symbol list");
     Ok(symbols)
 }
