@@ -18,6 +18,10 @@ logs-syncer: ## 📜 DB-Syncer logs...
 	@echo "📜 DB-Syncer logs..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=db-syncer -n backend --tail=100 -f
 
+logs-cacher: ## 📜 price-cacher logs...
+	@echo "📜 price-cacher logs..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=price-cacher -n backend --tail=100 -f
+
 logs-adminer: ## 📜 Adminer logs...
 	@echo "📜 Adminer logs..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=adminer -n data --tail=100 -f
@@ -44,5 +48,6 @@ logs-all: ## 📜 All pods (last 50 lines each, no follow)...
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=streamlit  -n frontend     --tail=50 --prefix
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=trade-writer -n backend    --tail=50 --prefix
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=db-syncer  -n backend      --tail=50 --prefix
+	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=price-cacher  -n backend      --tail=50 --prefix
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=postgres   -n data         --tail=50 --prefix
 	@$(DOCKER) exec -it k8s-toolbox kubectl logs -l app=redis      -n data         --tail=50 --prefix

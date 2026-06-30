@@ -34,10 +34,6 @@ shell-ui: ## 🔌 Connecting to Streamlit frontend...
 	@echo "🔌 Connecting to Streamlit frontend..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it deployment/streamlit -n frontend -- /bin/sh
 
-shell-worker: ## 🔌 Connecting to Trade-Writer worker...
-	@echo "🔌 Connecting to Trade-Writer worker..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it deployment/trade-writer -n backend -- /bin/sh
-
 shell-postgres: ## 🔌 Connecting to Postgres container...
 	@echo "🔌 Connecting to Postgres container..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it statefulset/postgres -n data -- /bin/sh

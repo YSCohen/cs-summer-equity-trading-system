@@ -22,6 +22,10 @@ chaos-syncer: ## 🔫 Terminating DB-Syncer worker pods...
 	@echo "🔫 Terminating DB-Syncer worker pods..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl delete pods -l app=db-syncer -n backend
 
+chaos-cacher: ## 🔫 Terminating price-cacher worker pods...
+	@echo "🔫 Terminating price-cacher worker pods..."
+	@$(DOCKER) exec -it k8s-toolbox kubectl delete pods -l app=price-cacher -n backend
+
 chaos-redis: ## 🧨 Terminating Redis Pod...
 	@echo "🧨 Terminating Redis Pod..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl delete pods -l app=redis -n data
