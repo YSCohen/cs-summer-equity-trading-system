@@ -3,7 +3,9 @@
 use dotenvy::dotenv;
 use futures_util::SinkExt;
 use redis::AsyncCommands;
-use redis::streams::{StreamReadOptions, StreamReadReply};
+use redis::streams::{
+    StreamDeletionPolicy, StreamReadOptions, StreamReadReply, StreamTrimOptions, StreamTrimmingMode,
+};
 use serde::Deserialize;
 use std::env;
 use std::fmt::Write;
@@ -213,9 +215,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 "Decoded no valid rows, ACKing {} bad messages to discard them.",
                 msg_ids.len()
             );
-            let _: Result<(), _> = redis_conn
-                .xack(&stream_name, &consumer_group, &msg_ids)
-                .await;
+            if let Err(e) =
+                ack_and_trim_stream(&mut redis_conn, &stream_name, &consumer_group, &msg_ids).await
+            {
+                error!("Failed to ACK and trim messages in Redis: {}", e);
+            }
             continue;
         }
 
@@ -239,17 +243,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     continue;
                 }
 
-                // Acknowledge messages in Redis ONLY after Postgres confirms write
-                match redis_conn
-                    .xack(&stream_name, &consumer_group, &msg_ids)
+                // xack and trim messages in redis ONLY after postgres confirms write
+                match ack_and_trim_stream(&mut redis_conn, &stream_name, &consumer_group, &msg_ids)
                     .await
                 {
-                    Ok(()) => info!("Successfully copied and ACK'd {} rows", msg_ids.len()),
-                    Err(e) => error!("Failed to ACK messages in Redis: {}", e),
+                    Ok(()) => info!(
+                        "Successfully copied, ACK'd, and trimmed {} rows",
+                        msg_ids.len()
+                    ),
+                    Err(e) => error!("Failed to ACK and trim messages in Redis: {}", e),
                 }
             }
             Err(e) => {
-                error!("Failed to initialize Postgres COPY context: {}", e);
+                error!("Failed to initialize postgres COPY context: {}", e);
             }
         }
     }
@@ -281,4 +287,25 @@ fn log_postgres_error(context: &str, err: &tokio_postgres::Error) {
     } else {
         error!("{}: {}", context, err);
     }
+}
+
+async fn ack_and_trim_stream(
+    redis_conn: &mut redis::aio::MultiplexedConnection,
+    stream_name: &str,
+    consumer_group: &str,
+    msg_ids: &[String],
+) -> Result<(), redis::RedisError> {
+    let _: usize = redis_conn
+        .xack(stream_name, consumer_group, msg_ids)
+        .await?;
+
+    let _: usize = redis_conn
+        .xtrim_options(
+            stream_name,
+            &StreamTrimOptions::maxlen(StreamTrimmingMode::Exact, 0)
+                .set_deletion_policy(StreamDeletionPolicy::Acked),
+        )
+        .await?;
+
+    Ok(())
 }
