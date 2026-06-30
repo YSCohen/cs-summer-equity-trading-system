@@ -12,6 +12,8 @@ images:
     newName: ghcr.io/sm26-industrial-software-dev/db-syncer:latest
   - name: trade-writer-image
     newName: ghcr.io/sm26-industrial-software-dev/trade-writer:latest
+  - name: price-cacher-image
+    newName: ghcr.io/sm26-industrial-software-dev/price-cacher:latest
 
 resources:
   # 1. Namespaces must exist before anything else is deployed
@@ -33,6 +35,7 @@ resources:
   - apps/adminer
   - apps/trade-writer
   - apps/db-syncer
+  - apps/price-cacher
 
 configMapGenerator:
   - name: db-routing
