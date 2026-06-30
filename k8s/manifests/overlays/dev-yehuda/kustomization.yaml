@@ -6,12 +6,12 @@ resources:
   - ../../base
 
 images:
-  # - name: ghcr.io/sm26-industrial-software-dev/db-syncer
-  #   newTag: dev
-  # - name: ghcr.io/sm26-industrial-software-dev/trade-writer
-  #   newTag: dev
-  # - name: ghcr.io/sm26-industrial-software-dev/price-cacher
-  #   newTag: dev
+  - name: ghcr.io/sm26-industrial-software-dev/db-syncer
+    newTag: dev
+  - name: ghcr.io/sm26-industrial-software-dev/trade-writer
+    newTag: dev
+  - name: ghcr.io/sm26-industrial-software-dev/price-cacher
+    newTag: dev
 
 patches:
   - target:
