@@ -17,10 +17,10 @@ ENV RUST_TARGET=${RUST_ARCH}-unknown-linux-musl
 RUN rustup target add $RUST_TARGET
 
 COPY --from=planner /recipe.json recipe.json
-ARG BIN_NAME
 RUN cargo chef cook --release --target $RUST_TARGET --recipe-path recipe.json
 
 COPY . .
+ARG BIN_NAME
 RUN cargo build --release --target $RUST_TARGET --bin $BIN_NAME
 RUN cp target/$RUST_TARGET/release/$BIN_NAME /app-binary
 
