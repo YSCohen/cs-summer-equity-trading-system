@@ -77,20 +77,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // buffer to hold bulk COPY data. Pre-allocating ~500KB to avoid reallocations
     let mut copy_payload_buffer = String::with_capacity(512_000);
 
-    loop {
-        // Fetch batches from the configured redis stream
-        let opts = StreamReadOptions::default()
-            .group(&consumer_group, &worker_name)
-            .count(5000) // TODO: determine best number
-            .block(100);
+    // opts to fetch batches from the configured redis stream
+    let opts = StreamReadOptions::default()
+        .group(&consumer_group, &worker_name)
+        .count(5000) // TODO: determine best number
+        .block(100);
 
-        // (these two vars need to be assigned because of lifetime magic in the select! macro)
-        let keys = [&stream_name];
-        let ids = [&stream_id];
+    loop {
+        // (these two vars need to be assigned because of lifetime witchcraft in the select macro)
+        let stream_name_arr = [&stream_name];
+        let stream_id_arr = [&stream_id];
 
         // Select between waiting for Redis stream entries or a shutdown signal:
         let reply: StreamReadReply = tokio::select! {
-            res = redis_conn.xread_options(&keys, &ids, &opts) => {
+            res = redis_conn.xread_options(&stream_name_arr, &stream_id_arr, &opts) => {
                 match res {
                     Ok(r) => r,
                     Err(e) => {
@@ -106,7 +106,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        // If reading pending entries ("0") returns empty, switch to new entries (">")
         if reply.keys.is_empty() || reply.keys[0].ids.is_empty() {
             if stream_id == "0" {
                 info!("Finished processing pending entries, switching to new messages.");
@@ -115,59 +114,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-        let mut msg_ids = Vec::new();
-        copy_payload_buffer.clear(); // Clear the buffer for the new batch
-
-        for stream_key in reply.keys {
-            for record in stream_key.ids {
-                msg_ids.push(record.id.clone());
-
-                let Some(redis::Value::BulkString(bytes)) = record.map.get("d") else {
-                    warn!("Redis message {} missing binary field 'd'", record.id);
-                    continue; // Skip malformed record
-                };
-
-                let trade: TradePayload = match rmp_serde::from_slice(bytes) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        warn!("Failed to decode payload for {}: {}", record.id, e);
-                        continue; // Skip badly serialized record
-                    }
-                };
-
-                let created = jiff::Timestamp::from_second(trade.created_at).map_or_else(
-                    |_| "\\N".to_string(),
-                    |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
-                );
-
-                let updated = jiff::Timestamp::from_second(trade.updated_at).map_or_else(
-                    |_| "\\N".to_string(),
-                    |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
-                );
-
-                let other_acc = trade
-                    .other_account
-                    .as_deref()
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or("\\N");
-
-                // OPTIMIZATION: Write directly into the single pre-allocated String buffer
-                let _ = writeln!(
-                    &mut copy_payload_buffer,
-                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                    trade.trade_id,
-                    trade.account_id,
-                    trade.user_id,
-                    trade.direction,
-                    trade.symbol_ticker,
-                    created,
-                    updated,
-                    trade.quantity,
-                    trade.price,
-                    other_acc
-                );
-            }
-        }
+        let msg_ids = build_payload_buffer(&mut copy_payload_buffer, reply);
 
         // If we parsed 0 valid rows but have msg_ids, we must ACK them so they don't get stuck.
         if copy_payload_buffer.is_empty() {
@@ -219,6 +166,63 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+}
+
+fn build_payload_buffer(copy_payload_buffer: &mut String, reply: StreamReadReply) -> Vec<String> {
+    let mut msg_ids = Vec::new();
+    copy_payload_buffer.clear(); // Clear the buffer for the new batch
+
+    for stream_key in reply.keys {
+        for record in stream_key.ids {
+            msg_ids.push(record.id.clone());
+
+            let Some(redis::Value::BulkString(bytes)) = record.map.get("d") else {
+                warn!("Redis message {} missing binary field 'd'", record.id);
+                continue; // Skip malformed record
+            };
+
+            let trade: TradePayload = match rmp_serde::from_slice(bytes) {
+                Ok(t) => t,
+                Err(e) => {
+                    warn!("Failed to decode payload for {}: {}", record.id, e);
+                    continue; // Skip badly serialized record
+                }
+            };
+
+            let created = jiff::Timestamp::from_second(trade.created_at).map_or_else(
+                |_| "\\N".to_string(),
+                |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
+            );
+
+            let updated = jiff::Timestamp::from_second(trade.updated_at).map_or_else(
+                |_| "\\N".to_string(),
+                |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
+            );
+
+            let other_acc = trade
+                .other_account
+                .as_deref()
+                .filter(|value| !value.is_empty())
+                .unwrap_or("\\N");
+
+            let _ = writeln!(
+                copy_payload_buffer,
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                trade.trade_id,
+                trade.account_id,
+                trade.user_id,
+                trade.direction,
+                trade.symbol_ticker,
+                created,
+                updated,
+                trade.quantity,
+                trade.price,
+                other_acc
+            );
+        }
+    }
+
+    msg_ids
 }
 
 #[derive(Deserialize)]
