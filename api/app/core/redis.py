@@ -16,4 +16,5 @@ redis_dictionaries = [
     "accounts",
     "positions",
     "username",
+    "market_prices"
 ]  # redis dicts TODO update these tables once agrred upon naming convention
