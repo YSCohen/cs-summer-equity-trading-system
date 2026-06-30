@@ -17,7 +17,7 @@ async fn main() {
     let _ = dotenv();
 
     if let Err(err) = helpers::init_tracing("trade-writer") {
-        eprintln!("failed to initialize tracing: {}", err);
+        eprintln!("failed to initialize tracing: {err}");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
@@ -42,9 +42,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!("read env vars");
 
-    // wait for DB servers to come up
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-
     // Connect to postgres
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
     tokio::spawn(async move {
@@ -65,10 +62,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .await;
 
     if let Err(e) = group_create_result {
-        if !e.to_string().contains("BUSYGROUP") {
-            error!("Initializing consumer group failed: {}", e);
-        } else {
+        if e.to_string().contains("BUSYGROUP") {
             debug!("Consumer group '{}' already exists", consumer_group);
+        } else {
+            error!("Initializing consumer group failed: {}", e);
         }
     }
 
@@ -103,7 +100,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
-            _ = helpers::shutdown_signal() => {
+            () = helpers::shutdown_signal() => {
                 info!("Shutdown signal received. Exiting loop gracefully...");
                 return Ok(());
             }
@@ -138,13 +135,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 };
 
-                let created = jiff::Timestamp::from_second(trade.created_at)
-                    .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
-                    .unwrap_or_else(|_| "\\N".to_string());
+                let created = jiff::Timestamp::from_second(trade.created_at).map_or_else(
+                    |_| "\\N".to_string(),
+                    |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
+                );
 
-                let updated = jiff::Timestamp::from_second(trade.updated_at)
-                    .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
-                    .unwrap_or_else(|_| "\\N".to_string());
+                let updated = jiff::Timestamp::from_second(trade.updated_at).map_or_else(
+                    |_| "\\N".to_string(),
+                    |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
+                );
 
                 let other_acc = trade
                     .other_account

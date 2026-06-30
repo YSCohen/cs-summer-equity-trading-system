@@ -15,7 +15,7 @@ async fn main() {
     let _ = dotenv();
 
     if let Err(err) = helpers::init_tracing("db-syncer") {
-        eprintln!("failed to initialize tracing: {}", err);
+        eprintln!("failed to initialize tracing: {err}");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
@@ -61,8 +61,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         sync_positions(&pg_client, &mut redis_conn).await?;
 
         tokio::select! {
-            _ = tokio::time::sleep(std::time::Duration::from_secs(sync_interval)) => {}
-            _ = helpers::shutdown_signal() => {
+            () = tokio::time::sleep(std::time::Duration::from_secs(sync_interval)) => {}
+            () = helpers::shutdown_signal() => {
                 info!("Shutdown signal received. Exiting loop gracefully...");
                 return Ok(());
             }
@@ -143,7 +143,7 @@ async fn sync_json_hash_table<T>(
         let data = match (spec.parse_row)(&id_str, &json_str) {
             Ok(data) => data,
             Err(err) => {
-                error!("{}", err);
+                error!("{err}");
                 skipped += 1;
                 continue;
             }
@@ -207,7 +207,7 @@ async fn sync_json_hash_table<T>(
             );
         }
         Err(err) => {
-            error!("failed to initialize postgres COPY context: {}", err);
+            error!("failed to initialize postgres COPY context: {err}");
         }
     }
 

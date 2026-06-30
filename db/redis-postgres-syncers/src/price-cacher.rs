@@ -15,7 +15,7 @@ async fn main() {
     let _ = dotenv();
 
     if let Err(err) = helpers::init_tracing("price-cacher") {
-        eprintln!("failed to initialize tracing: {}", err);
+        eprintln!("failed to initialize tracing: {err}");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
@@ -50,8 +50,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         update_all_cached_prices(&mut redis_conn).await?;
 
         tokio::select! {
-            _ = tokio::time::sleep(std::time::Duration::from_secs(interval)) => {}
-            _ = helpers::shutdown_signal() => {
+            () = tokio::time::sleep(std::time::Duration::from_secs(interval)) => {}
+            () = helpers::shutdown_signal() => {
                 info!("Shutdown signal received. Exiting loop gracefully...");
                 return Ok(());
             }
