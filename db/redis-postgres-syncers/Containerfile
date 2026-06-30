@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+
+# to build, pass name of desired bin. for example:
+# --build-arg BIN_NAME=trade-writer
+
+FROM lukemathwalker/cargo-chef:latest AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+
+FROM lukemathwalker/cargo-chef:latest AS builder
+RUN apt-get update && apt-get install -y musl-tools
+ARG TARGETARCH
+ARG RUST_ARCH=${TARGETARCH/amd64/x86_64}
+ARG RUST_ARCH=${RUST_ARCH/arm64/aarch64}
+ENV RUST_TARGET=${RUST_ARCH}-unknown-linux-musl
+RUN rustup target add $RUST_TARGET
+
+COPY --from=planner /recipe.json recipe.json
+ARG BIN_NAME
+RUN cargo chef cook --release --target $RUST_TARGET --recipe-path recipe.json
+
+COPY . .
+RUN cargo build --release --target $RUST_TARGET --bin $BIN_NAME
+RUN cp target/$RUST_TARGET/release/$BIN_NAME /app-binary
+
+
+FROM scratch
+COPY --from=builder /app-binary /app-binary
+CMD ["/app-binary"]
