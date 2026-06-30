@@ -103,7 +103,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
-            _ = shutdown_signal() => {
+            _ = helpers::shutdown_signal() => {
                 info!("Shutdown signal received. Exiting loop gracefully...");
                 return Ok(());
             }
@@ -234,26 +234,6 @@ struct TradePayload {
     quantity: i32,
     price: String,
     other_account: Option<String>,
-}
-
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install SIGTERM handler");
-    };
-
-    let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
 }
 
 fn log_postgres_error(context: &str, err: &tokio_postgres::Error) {

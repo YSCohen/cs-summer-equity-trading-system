@@ -34,6 +34,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let pg_config = env::var("POSTGRES_CONFIG").map_err(|_| "POSTGRES_CONFIG must be set")?;
     let redis_url = env::var("REDIS_URL").map_err(|_| "REDIS_URL must be set")?;
 
+    let sync_interval: u64 = env::var("DELAY")
+        .map_err(|_| "DELAY must be set")?
+        .parse()
+        .map_err(|_| "DELAY must be an int")?;
+
     debug!("read env vars");
 
     // Connect to postgres
@@ -50,11 +55,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
     debug!("connected to redis");
 
-    sync_users(&pg_client, &mut redis_conn).await?;
-    sync_accounts(&pg_client, &mut redis_conn).await?;
-    sync_positions(&pg_client, &mut redis_conn).await?;
+    loop {
+        sync_users(&pg_client, &mut redis_conn).await?;
+        sync_accounts(&pg_client, &mut redis_conn).await?;
+        sync_positions(&pg_client, &mut redis_conn).await?;
 
-    Ok(())
+        tokio::select! {
+            _ = tokio::time::sleep(std::time::Duration::from_secs(sync_interval)) => {}
+            _ = helpers::shutdown_signal() => {
+                info!("Shutdown signal received. Exiting loop gracefully...");
+                return Ok(());
+            }
+        }
+    }
 }
 
 struct JsonHashTableSyncSpec<T> {
