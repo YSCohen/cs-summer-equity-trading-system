@@ -36,10 +36,6 @@ spec:
             - secretRef:
                 name: db-credentials
           env:
-            - name: LOGGING_CONFIG
-              value: '{"version":1,"disable_existing_loggers":false,"formatters":{"json":{"()":"pythonjsonlogger.jsonlogger.JsonFormatter"}},"handlers":{"console":{"class":"logging.StreamHandler","formatter":"json"}},"root":{"level":"INFO","handlers":["console"]}}'
-            - name: CURRENT_IMAGE
-              value: "to-be-replaced-by-kustomize"
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
@@ -53,7 +49,7 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
             - name: ENVIRONMENT
-              value: "base"
+              value: "Production"
 
             - name: REDIS_MAX_PODS
               value: "20"
