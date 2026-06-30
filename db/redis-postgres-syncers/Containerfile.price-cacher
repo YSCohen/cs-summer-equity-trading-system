@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+
+# --- Stage 1: Build ---
+FROM rust:latest AS builder
+
+# BuildKit automatically sets TARGETARCH var ('amd64' or 'arm64')
+ARG TARGETARCH
+
+# map Docker arch name to Rust arch name, and save target triple as env var
+ARG RUST_ARCH=${TARGETARCH/amd64/x86_64}
+ARG RUST_ARCH=${RUST_ARCH/arm64/aarch64}
+ENV RUST_TARGET=${RUST_ARCH}-unknown-linux-musl
+
+RUN rustup target add $RUST_TARGET
+
+# Install musl tools to ensure static linking works across arches
+RUN apt-get update && apt-get install -y musl-tools
+
+WORKDIR /app
+
+# build deps in separate layer
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {unimplemented!()}" > src/price-cacher.rs
+RUN cargo build --release --target $RUST_TARGET --bin price-cacher
+RUN rm -f target/$RUST_TARGET/release/deps/price_cacher* target/$RUST_TARGET/release/price-cacher*
+
+COPY ./src ./src
+RUN cargo build --release --target $RUST_TARGET --bin price-cacher
+
+# Move the binary to a predictable location for Stage 2
+RUN cp target/$RUST_TARGET/release/price-cacher /app/price-cacher-binary
+
+# --- Stage 2: Lightweight Runtime Container ---
+FROM scratch
+WORKDIR /app
+
+# Copy compiled binary from the predictable location
+COPY --from=builder /app/price-cacher-binary /app/price-cacher
+
+CMD ["./price-cacher"]
