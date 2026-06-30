@@ -37,6 +37,9 @@ spec:
             - name: LOKI_URL
               value: "http://loki-stack.monitoring.svc.cluster.local:3100"
 
+            - name: DELAY
+              value: "180"
+
             - name: WORKER_NAME
               valueFrom:
                 fieldRef:
