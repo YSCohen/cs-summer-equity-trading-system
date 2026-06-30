@@ -11,28 +11,12 @@ use std::env;
 use std::fmt::Write;
 use tokio_postgres::NoTls;
 use tracing::{debug, error, info, warn};
-use tracing_loki::url::Url;
-use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
-
-#[derive(Deserialize)]
-struct TradePayload {
-    trade_id: String,
-    account_id: String,
-    user_id: String,
-    direction: String,
-    symbol_ticker: String,
-    created_at: i64,
-    updated_at: i64,
-    quantity: i32,
-    price: String,
-    other_account: Option<String>,
-}
 
 #[tokio::main]
 async fn main() {
     let _ = dotenv();
 
-    if let Err(err) = init_tracing() {
+    if let Err(err) = helpers::init_tracing("trade-writer") {
         eprintln!("failed to initialize tracing: {}", err);
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
@@ -46,29 +30,6 @@ async fn main() {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
-}
-
-fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
-    let loki_url = env::var("LOKI_URL").map_err(|_| "LOKI_URL must be set")?;
-    let worker_name = env::var("WORKER_NAME").map_err(|_| "WORKER_NAME must be set")?;
-
-    let loki_url = Url::parse(&loki_url)?;
-    let (loki_layer, loki_task) = tracing_loki::builder()
-        .label("app", "trade-writer")?
-        .label("pod", worker_name)?
-        .build_url(loki_url)?;
-
-    tracing_subscriber::registry()
-        .with(LevelFilter::DEBUG)
-        .with(loki_layer)
-        // .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
-        .init();
-
-    tokio::spawn(loki_task);
-
-    debug!("connected to loki");
-
-    Ok(())
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -259,6 +220,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+}
+
+#[derive(Deserialize)]
+struct TradePayload {
+    trade_id: String,
+    account_id: String,
+    user_id: String,
+    direction: String,
+    symbol_ticker: String,
+    created_at: i64,
+    updated_at: i64,
+    quantity: i32,
+    price: String,
+    other_account: Option<String>,
 }
 
 async fn shutdown_signal() {
