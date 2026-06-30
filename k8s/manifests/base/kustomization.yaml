@@ -19,6 +19,7 @@ resources:
 
   # 2. Infrastructure Layer
   - infrastructure/monitoring
+  - infrastructure/keda
 
   # 3. Data Layer
   - data-layer/postgres
