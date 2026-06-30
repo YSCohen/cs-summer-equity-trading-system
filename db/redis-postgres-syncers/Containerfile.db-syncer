@@ -20,11 +20,12 @@ WORKDIR /app
 
 # build deps in separate layer
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {unimplemented!()}" > src/db-syncer.rs
-RUN cargo build --release --target $RUST_TARGET --bin db-syncer
+RUN mkdir src && echo "pub fn nothing() {unimplemented!()}" > src/helpers.rs
+RUN cargo build --release --target $RUST_TARGET --lib
 RUN rm -f target/$RUST_TARGET/release/deps/db_syncer* target/$RUST_TARGET/release/db-syncer*
 
 COPY ./src ./src
+RUN touch src/helpers.rs
 RUN cargo build --release --target $RUST_TARGET --bin db-syncer
 
 # Move the binary to a predictable location for Stage 2

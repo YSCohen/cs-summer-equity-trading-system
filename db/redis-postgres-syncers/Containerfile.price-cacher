@@ -20,11 +20,12 @@ WORKDIR /app
 
 # build deps in separate layer
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {unimplemented!()}" > src/price-cacher.rs
-RUN cargo build --release --target $RUST_TARGET --bin price-cacher
+RUN mkdir src && echo "pub fn nothing() {unimplemented!()}" > src/helpers.rs
+RUN cargo build --release --target $RUST_TARGET --lib
 RUN rm -f target/$RUST_TARGET/release/deps/price_cacher* target/$RUST_TARGET/release/price-cacher*
 
 COPY ./src ./src
+RUN touch src/helpers.rs
 RUN cargo build --release --target $RUST_TARGET --bin price-cacher
 
 # Move the binary to a predictable location for Stage 2
