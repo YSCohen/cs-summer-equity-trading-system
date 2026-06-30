@@ -1,0 +1,43 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: price-cacher
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: price-cacher
+  template:
+    metadata:
+      labels:
+        app: price-cacher
+    spec:
+      initContainers:
+        - name: wait-for-loki
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Loki to become reachable..."
+              until nc -z loki-stack.monitoring.svc.cluster.local 3100; do
+                echo "Loki not ready. Sleeping 2 seconds..."
+                sleep 2
+              done
+              echo "Loki is online! Proceeding with price-cacher startup."
+      containers:
+        - name: price-cacher
+          image: price-cacher-image
+          imagePullPolicy: Always
+          env:
+            - name: REDIS_URL
+              value: "redis://redis.data.svc.cluster.local:6379/"
+
+            - name: LOKI_URL
+              value: "http://loki-stack.monitoring.svc.cluster.local:3100"
+
+            - name: WORKER_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
