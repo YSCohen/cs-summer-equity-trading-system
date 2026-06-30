@@ -6,4 +6,5 @@ namespace: data
 
 resources:
   - service.yaml
-  - deployment.yaml
+  - config.yaml
+  - state.yaml

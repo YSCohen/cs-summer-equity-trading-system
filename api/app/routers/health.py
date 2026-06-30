@@ -24,4 +24,5 @@ async def probe():
         # Runtime Info
         "process_id": os.getpid(),
         "uptime_seconds": round(time.time() - START_TIME, 2),
+        "Image": os.getenv("CURRENT_IMAGE", "unknown"),
     }

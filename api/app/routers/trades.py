@@ -36,6 +36,7 @@ async def get_all_user_trades(request: Request, user_id: str = Depends(verify_co
         FROM trades
         WHERE user_id = $1
         ORDER BY created_at DESC
+        LIMIT 50
         """,
         user_id,
     )

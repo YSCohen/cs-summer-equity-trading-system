@@ -70,13 +70,23 @@ async def change_account_short_perms(
             status_code=401, detail="You do not have access to this account"
         )
 
+    return_message = {}
+
     account_data = json.loads(raw_account)
     if account_name is not None:
         account_data["account_name"] = account_name
+        return_message["account_name"] = account_name
+    else:
+        return_message["account_name"] = account_data["account_name"]
     if can_short is not None:
         account_data["can_short"] = can_short
+        return_message["can_short"] = can_short
+    else:
+        return_message["can_short"] = account_data["can_short"]
 
     await redis_client.hset(redis_dictionaries[1], account_id, json.dumps(account_data))
+
+    return return_message
 
 
 async def get_all_users_accounts(user_id: str):

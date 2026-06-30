@@ -18,20 +18,6 @@ images:
 
 patches:
   - target:
-      kind: HelmRelease
-      name: loki-stack
-    patch: |-
-      apiVersion: helm.toolkit.fluxcd.io/v2
-      kind: HelmRelease
-      metadata:
-        name: loki-stack
-      spec:
-        values:
-          prometheus:
-            server:
-              global:
-                scrape_interval: 15s
-  - target:
       kind: Deployment
       name: fastapi-api
     patch: |-
@@ -46,4 +32,4 @@ patches:
               - name: fastapi
                 env:
                   - name: ENVIRONMENT
-                    value: "dev-sean"
+                    value: "dev-will"

@@ -2,6 +2,17 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+images:
+  - name: api-image
+    newName: ghcr.io/sm26-industrial-software-dev/api
+    newTag: latest
+  - name: web-ui-image
+    newName: ghcr.io/sm26-industrial-software-dev/web-ui:latest
+  - name: db-syncer-image
+    newName: ghcr.io/sm26-industrial-software-dev/db-syncer:latest
+  - name: trade-writer-image
+    newName: ghcr.io/sm26-industrial-software-dev/trade-writer:latest
+
 resources:
   # 1. Namespaces must exist before anything else is deployed
   - namespaces.yaml

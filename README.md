@@ -1,25 +1,14 @@
-# Equity Trading
+# Equity Trading System
 
-## Information
+Welcome to the heart of our operations! This repository contains the entire infrastructure and application stack for our high-frequency Equity Trading System.
 
-A summer project.
+### The Stack
+We run a modern, containerized stack designed for speed and reliability:
+* **API**: FastAPI (Python) with `uv` package management.
+* **UI**: Streamlit (Python) for rapid data visualization.
+* **Workers**: Rust-based syncers (`db-syncer`, `trade-writer`, `redis-populator`) for ultra-fast data handling.
+* **Data Layer**: Redis for ingestion, PostgreSQL for persistence, and PgBouncer for connection pooling.
+* **Infrastructure**: Kubernetes (k3d), Flux for GitOps, and the Loki-stack for observability.
 
-## Technologies
-
-Currently we plan on using:
-
-- K3d
-- Redis
-- Postgres
-- Locust
-- Loki/Grafana
-- Docker
-- Python
-- orjson
-- FastAPI
-- Streamlit
-- GitHub
-
-## Logging
-
-If you want to set up your own loggin please see [DEVELOPERS.md](./DEVELOPERS.md)
+### Getting Started
+Ready to jump in? Check out our [DEVELOPERS.md](DEVELOPERS.md) for a deep dive into how to set up your environment, manage overlays, and debug the cluster.

@@ -24,3 +24,7 @@ adminer-info: ## 🌐 Adminer UI: http://adminer.localhost:8080
 	@$(DOCKER) exec -it k8s-toolbox kubectl get secret db-credentials -n data -o jsonpath='{.data.POSTGRES_USER}' | base64 -d; echo ""
 	@echo -n "Pass: "
 	@$(DOCKER) exec -it k8s-toolbox kubectl get secret db-credentials -n data -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d; echo ""
+
+status-images: ## 🏷️  Check the exact Docker images running for our custom apps
+	@echo "🏷️  CUSTOM APP IMAGE VERSIONS:"
+	@$(MAKE) --no-print-directory kubectl CMD="get pods -A -l 'app in (fastapi, streamlit, trade-writer, db-syncer)' -o custom-columns=NAMESPACE:.metadata.namespace,POD:.metadata.name,IMAGE:.spec.containers[*].image"

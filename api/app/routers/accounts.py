@@ -38,9 +38,15 @@ async def change_short_perms(
 ):
     logger.info("Recieved new short change request")
 
-    await change_account_short_perms(account_id, user_id = user_id, account_name = request.account_name, can_short = request.can_short)
+    details = await change_account_short_perms(
+        account_id,
+        user_id=user_id,
+        account_name=request.account_name,
+        can_short=request.can_short,
+    )
 
-    return {"message": "Perms changed"}
+    details["message"] = "Perms changed"
+    return details
 
 
 @router.get("/users/allaccounts")

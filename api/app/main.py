@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
     yield
 
     await app.state.pg_pool.close()
-    await redis_client.close()
+    await redis_client.aclose()
 
     logger.info("Closed connection to Postgres")
     logger.info("Closing down API")

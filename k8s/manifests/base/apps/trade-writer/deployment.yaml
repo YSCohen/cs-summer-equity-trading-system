@@ -14,18 +14,6 @@ spec:
         app: trade-writer
     spec:
       initContainers:
-        - name: wait-for-loki
-          image: busybox:1.36
-          command:
-            - sh
-            - -c
-            - |
-              echo "Waiting for Loki to become reachable..."
-              until nc -z loki-stack.monitoring.svc.cluster.local 3100; do
-                echo "Loki not ready. Sleeping 2 seconds..."
-                sleep 2
-              done
-              echo "Loki is online!"
         - name: wait-for-db
           image: busybox:1.36
           command:
@@ -37,10 +25,22 @@ spec:
                 echo "Database not ready. Sleeping 2 seconds..."
                 sleep 2
               done
-              echo "Database is online! Proceeding with trade-writer startup."
+              echo "Database is online!"
+        - name: wait-for-loki
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Loki to become reachable..."
+              until nc -z loki-stack.monitoring.svc.cluster.local 3100; do
+                echo "Loki not ready. Sleeping 2 seconds..."
+                sleep 2
+              done
+              echo "Loki is online! Proceeding with trade-writer startup."
       containers:
         - name: trade-writer
-          image: ghcr.io/yscohen/trade-writer:latest
+          image: trade-writer-image
           imagePullPolicy: Always
           env:
             - name: POSTGRES_USER

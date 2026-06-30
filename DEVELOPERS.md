@@ -1,87 +1,52 @@
-# 📈 Equity Trading App: Developer Onboarding Guide
+---
+# Developer Guide
 
-Welcome to the Equity Trading App repository! This guide will help you operate our local Kubernetes (k3d) environment.
+Welcome to the team! This guide covers everything you need to build, run, and debug the Equity Trading System.
 
-Our infrastructure strictly follows a **GitOps** methodology. Every component of our infrastructure is declarative and version-controlled. You **do not** need to manually modify Kubernetes manifests or understand Helm to run this locally; you just need to use the provided scripts.
+> **Note:** We prefer using the `Makefile` wrappers for all cluster operations. If you don't have `make` installed, you can use `./cluster_up.sh` as a direct fallback.
 
 ---
 
-## 🚀 1. Activating the Observability Stack
+## 1. Environment Setup & Overlays
+Every developer has their own namespace (e.g., `dev-sean`, `dev-max`). This allows you to work in your own isolated area of the cluster.
 
-To conserve local system resources, the comprehensive observability stack (Loki, Promtail, Prometheus, Grafana) is disabled by default.
-
-Run this command to start up the whole cluster
-
-```bash
-./cluster_up.sh
-```
-
-Max, this command will sync all of the changes to your github repo as opposed to the org one
-
-```bash
-./cluster_up.sh --max
-```
-
-> ⚠️ **IMPORTANT: BE PATIENT!** > After running `./cluster_up.sh`, it takes about **1 to 2 minutes** for the GitOps controllers to reconcile, pull the necessary images, initialize the Loki database, and start the Grafana web server. If the page doesn't load immediately, grab a coffee and wait for the pods to spin up!
+### How to use your Overlay:
+1. **Push to GitHub**: Flux only reconciles what is in the repository. **Always `git push` your changes** to your branch before they appear in the cluster.
+2. **Changing Images**: If you want to use a personal image instead of the organization's default, edit the `kustomization.yaml` inside your specific overlay directory (`k8s/manifests/overlays/dev-<name>/`). 
+   * Uncomment the `images` section.
+   * Update the `newName` to point to your specific container registry.
+   * Run `make sync` to trigger a Flux reconciliation.
+3. **Overwriting**: You can overwrite any base configuration (resources, replicas, env vars) in your `kustomization.yaml`.
 
 ---
 
-## 📊 2. Accessing & Using Grafana
+## 2. The "Make" Toolbox (Debugging)
+Stop trying to memorize complex `kubectl` commands. We have mapped everything to the `Makefile`.
 
-Once the cluster is up, Grafana is accessible via your browser. Because of how our local Traefik load balancer is configured, you must specify **port 8080**.
-
-* **URL:** `http://grafana.localhost:8080`
-* **Username:** `admin`
-* **Password:** `Rust!`
-
-Navigate to **Dashboards -> FastAPI Developer Dashboard** (or k3d Stats) to view the live log feeds and cluster statistics.
-
-## 📝 3. Writing Your Logs (Strict Conventions)
-
-**Required Format:**
-`[YYYY-MM-DD HH:MM:SS] LEVEL: Message`
-
-**Example (Python Logbook):**
-If you are working on the FastAPI or Streamlit services, configure your FileHandler format string exactly like this:
-
-```python
-import logbook
-from pathlib import Path
-
-# 1. Point to your specific subfolder!
-LOG_FILE = Path("../../logs/FastAPI/app.log")
-LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-# 2. Use this exact format string
-file_handler = logbook.FileHandler(
-    LOG_FILE, 
-    level='INFO', 
-    format_string='[{record.time:%Y-%m-%d %H:%M:%S}] {record.level_name}: {record.channel}: {record.message}'
-)
-file_handler.push_application()
-```
+* **See all available commands**: Run `make help` to see the full list of targets and descriptions.
+* **Check System Health**:
+    * `make status`: View the status of all pods across all namespaces.
+    * `make status-wide`: View pod status with node/IP details.
+* **Direct Access**: 
+    * `make shell-api` / `make shell-ui`: Hop into a container shell if you need to inspect files.
+    * `make psql`: Jump straight into the Postgres console.
+    * `make redis-cli`: Open the Redis CLI.
 
 ---
 
-## 🦊 5. Important Notice for Max: GitOps and Locust Load Testing
+## 3. Logging & Observability
+We use **Loki** to aggregate logs. 
 
-Hey Max! As you configure or execute load tests against the FastAPI backend using Locust, please adhere to our architectural standards.
+### Standard Output (stdout) Requirements
+* **Everything must be JSON**: If you are logging to `stdout`, your logs must be serialized as **JSON**. Our collectors parse JSON logs automatically for Grafana.
+* **Push URL**: If you need to push logs manually, the endpoint is: `http://loki-stack.monitoring.svc.cluster.local:3100/loki/api/v1/push`
 
-### GitOps Principles
+### Debugging Logs in Grafana
+* **URL**: `http://grafana.localhost:8080`
+* **Workflow**: Check the logs via `make logs-api` or `make logs-ui` before heading to the Grafana dashboard to query the error history.
 
-We utilize **Flux** for GitOps operations. The `main` branch of this GitHub repository is the absolute source of truth for the cluster's state. Any manual, imperative changes (e.g., using `kubectl edit` or temporary UI workarounds) will be detected as configuration drift and immediately overwritten by Flux controllers.
+---
 
-### Updating and Testing `locustfile.py`
-
-Locust is deployed via our GitOps pipeline and is strictly maintained at 1 replica. The load-testing script (`locustfile.py`) is injected into the Locust Pod via a dynamically generated ConfigMap.
-
-To update and test your load-testing scripts locally without conflicting with Flux, utilize the provided deployment script:
-
-1. **Modify the Script:** Make your required changes to `locust/locustfile.py`.
-2. **Execute the Reload Script:** From the repository root, run:
-
-    ```bash
-    ./locust_reload.sh
-    ```
-
-3. **Validate:** This script synchronizes your local code changes with the cluster and forces a rollout of the Locust Pod, allowing you to immediately validate your updated load profiles.
+## 4. Need Help?
+* **Flux Stuck?**: If your changes aren't appearing, run `make sync`. This forces Flux to reconcile the stack with the repository immediately.
+* **Load Testing**: Use `./locust_reload.sh` to sync your local `locustfile.py` changes to the cluster without waiting for the full GitOps cycle.

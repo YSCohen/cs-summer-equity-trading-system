@@ -22,7 +22,7 @@ if [ -f /etc/os-release ]; then
 fi
 
 # Trigger ONLY if resolvectl exists AND the OS is NOT Ubuntu
-if command -v resolvectl >/dev/null 2>&1 && [[ "$OS_ID" != "ubuntu" ]]; then
+if command -v resolvectl >/dev/null 2>&1 && [[ "$OS_ID" != "cachyos" ]] && [[ "$OS_ID" != "ubuntu" ]]; then
     echo ""
     echo "🌐 SYSTEMD-RESOLVED DETECTED"
     echo "----------------------------------------------------------"
@@ -55,12 +55,16 @@ TARGET_FILE="target-upstream.yaml"
 
 case "${1:-}" in
 --sean)
-    REPO_NAME="dev-repo"
-    TARGET_FILE="target-fork.yaml"
+    REPO_NAME="dev-repo-sean"
+    TARGET_FILE="target-sean.yaml"
     ;;
 --max)
     REPO_NAME="dev-repo-max"
     TARGET_FILE="target-max.yaml"
+    ;;
+--will)
+    REPO_NAME="dev-repo-will"
+    TARGET_FILE="target-will.yaml"
     ;;
 --yehuda)
     REPO_NAME="dev-repo-yehuda"
@@ -71,7 +75,7 @@ case "${1:-}" in
     ;;
 *)
     echo "❌ Unknown flag: ${1}"
-    echo "   Usage: ./cluster_up.sh [--sean | --max]"
+    echo "   Usage: ./cluster_up.sh [--sean | --max | --yehuda | --will]"
     echo "   No flag = upstream (production-like)"
     exit 1
     ;;
