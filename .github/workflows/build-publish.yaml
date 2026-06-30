@@ -31,10 +31,16 @@ jobs:
             dockerfile: web-ui/Dockerfile
           - component: trade-writer
             context: db/redis-postgres-syncers
-            dockerfile: db/redis-postgres-syncers/Containerfile.trade-writer
+            dockerfile: db/redis-postgres-syncers/Containerfile
+            build_args: BIN_NAME=trade-writer
           - component: db-syncer
             context: db/redis-postgres-syncers
-            dockerfile: db/redis-postgres-syncers/Containerfile.db-syncer
+            dockerfile: db/redis-postgres-syncers/Containerfile
+            build_args: BIN_NAME=db-syncer
+          - component: price-cacher
+            context: db/redis-postgres-syncers
+            dockerfile: db/redis-postgres-syncers/Containerfile
+            build_args: BIN_NAME=price-cacher
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -54,6 +60,7 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
+          build-args: ${{ matrix.build_args }}
           push: ${{ github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system' }}
           tags: ${{ env.REGISTRY }}/${{ steps.vars.outputs.OWNER_LOWER }}/${{ matrix.component }}:latest-amd64
           cache-from: type=gha,scope=${{ matrix.component }}-amd64
@@ -77,10 +84,16 @@ jobs:
             dockerfile: web-ui/Dockerfile
           - component: trade-writer
             context: db/redis-postgres-syncers
-            dockerfile: db/redis-postgres-syncers/Containerfile.trade-writer
+            dockerfile: db/redis-postgres-syncers/Containerfile
+            build_args: BIN_NAME=trade-writer
           - component: db-syncer
             context: db/redis-postgres-syncers
-            dockerfile: db/redis-postgres-syncers/Containerfile.db-syncer
+            dockerfile: db/redis-postgres-syncers/Containerfile
+            build_args: BIN_NAME=db-syncer
+          - component: price-cacher
+            context: db/redis-postgres-syncers
+            dockerfile: db/redis-postgres-syncers/Containerfile
+            build_args: BIN_NAME=price-cacher
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -101,6 +114,7 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/arm64
+          build-args: ${{ matrix.build_args }}
           push: ${{ github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system' }}
           tags: ${{ env.REGISTRY }}/${{ steps.vars.outputs.OWNER_LOWER }}/${{ matrix.component }}:latest-arm64
           cache-from: type=gha,scope=${{ matrix.component }}-arm64
@@ -113,7 +127,7 @@ jobs:
     if: github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
     strategy:
       matrix:
-        component: [api, web-ui, trade-writer, db-syncer]
+        component: [api, web-ui, trade-writer, db-syncer, price-cacher]
     steps:
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
