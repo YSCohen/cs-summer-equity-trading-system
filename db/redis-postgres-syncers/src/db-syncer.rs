@@ -116,7 +116,7 @@ async fn sync_json_hash_table<T>(
 
     let rows: std::collections::HashMap<String, String> = redis::cmd("HGETALL")
         .arg(spec.redis_key)
-        .query_async(&mut *redis_conn)
+        .query_async(redis_conn)
         .await?;
 
     info!(
