@@ -8,7 +8,7 @@ spec:
   interval: 1m
   url: https://github.com/YSCohen/cs-summer-equity-trading-system
   ref:
-    branch: main
+    branch: dev
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
