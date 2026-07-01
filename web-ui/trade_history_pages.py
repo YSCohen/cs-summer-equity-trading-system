@@ -8,6 +8,9 @@ from api_client import (
     get_trade_by_id,
     update_trade,
 )
+
+from trades_grid import flatten_trades, render_trades_grid
+
 from account_picker import account_select, get_account_name
 
 
@@ -42,16 +45,24 @@ def _render_trades_table(result):
         _trade_card(trade)
 
 
-@st.fragment(run_every="15s")
+@st.fragment(run_every="6s")
 def _all_trades_fragment():
-    _render_trades_table(get_trades())
+    result = get_trades()
+    if result["status"] != "success":
+        st.error(result["message"])
+        return
+
+    rows = flatten_trades(result["data"])
+    render_trades_grid(
+        rows,
+        empty_message="No trades yet. Book one to see history here.",
+        key="all_trades_grid",
+    )
 
 
 def render_all_trades_page():
     st.header("📜 Trade History")
     st.caption("GET /trades")
-    # No filters needed -- loads immediately and refreshes automatically,
-    # so trades booked from another tab show up here without a manual reload.
     _all_trades_fragment()
 
 
