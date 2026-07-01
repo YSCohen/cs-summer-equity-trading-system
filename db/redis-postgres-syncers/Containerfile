@@ -3,17 +3,29 @@
 # to build, pass name of desired bin. for example:
 # --build-arg BIN_NAME=trade-writer
 
-FROM lukemathwalker/cargo-chef:latest AS planner
+FROM --platform=$BUILDPLATFORM lukemathwalker/cargo-chef:latest AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 
-FROM lukemathwalker/cargo-chef:latest AS builder
-RUN apt-get update && apt-get install -y musl-tools
+FROM --platform=$BUILDPLATFORM lukemathwalker/cargo-chef:latest AS builder
+
+RUN apt-get update && apt-get install -y \
+    musl-tools \
+    gcc-aarch64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+#   ^ reduce layer size by deleting apt lists
+
 ARG TARGETARCH
 ARG RUST_ARCH=${TARGETARCH/amd64/x86_64}
 ARG RUST_ARCH=${RUST_ARCH/arm64/aarch64}
 ENV RUST_TARGET=${RUST_ARCH}-unknown-linux-musl
+
+# for compiling x64 use musl-gcc
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc
+# for cross-compiling to arm64, link with GNU aarch64 compiler
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
+
 RUN rustup target add $RUST_TARGET
 
 COPY --from=planner /recipe.json recipe.json
@@ -25,6 +37,7 @@ RUN cargo build --release --target $RUST_TARGET --bin $BIN_NAME
 RUN cp target/$RUST_TARGET/release/$BIN_NAME /app-binary
 
 
+# final stage assumes the platform requested in the build command
 FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app-binary /app-binary
