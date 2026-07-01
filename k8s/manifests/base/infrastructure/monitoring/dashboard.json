@@ -443,7 +443,7 @@
           "targets": [
             {
               "datasource": { "type": "loki", "uid": "Loki" },
-              "expr": "{app=\"trade-writer\"}",
+              "expr": "{app=\"trade-writer\"} | json | line_format \"{{.message}}\"",
               "refId": "A"
             }
           ]
@@ -470,7 +470,7 @@
                 "type": "loki",
                 "uid": "Loki"
               },
-              "expr": "{app=\"db-syncer\"}",
+              "expr": "{app=\"db-syncer\"}| json | line_format \"{{.message}}\"",
               "refId": "A"
             }
           ]
