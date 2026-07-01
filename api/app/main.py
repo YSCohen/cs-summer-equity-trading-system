@@ -40,7 +40,11 @@ async def lifespan(app: FastAPI):
         raise
 
     try:
-        ticker_service.valid_tickers = ticker_service.load_sp500()
+        ticker_service.valid_tickers = await ticker_service.load_sp500()
+
+        if len(ticker_service.valid_tickers) == 0:
+            logger.warning("No valid tickers found")
+            raise Exception("No valid tickers found")
 
         logger.info("Loaded S&P Tickers")
 

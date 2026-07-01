@@ -32,7 +32,7 @@ async def add_account(account_id: str, user_id: str = Depends(verify_cookie)):
     return {"message": f"Account added to user {username}"}
 
 
-@router.put("/users/update_account_details/{account_id}")
+@router.patch("/users/update_account_details/{account_id}")
 async def change_short_perms(
     account_id: str, request: Details, user_id: str = Depends(verify_cookie)
 ):

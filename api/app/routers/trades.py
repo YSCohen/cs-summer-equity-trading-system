@@ -36,7 +36,7 @@ async def get_all_user_trades(request: Request, user_id: str = Depends(verify_co
         FROM trades
         WHERE user_id = $1
         ORDER BY created_at DESC
-        LIMIT 50
+        LIMIT 30
         """,
         user_id,
     )
@@ -59,6 +59,7 @@ async def get_all_user_trades_for_account(
         WHERE user_id = $1
             AND account_id = $2
         ORDER BY created_at DESC
+        LIMIT 30
         """,
         user_id,
         account_id,
@@ -80,6 +81,7 @@ async def get_all_user_trades_for_ticker(
         WHERE user_id = $1
             AND symbol_ticker = $2
         ORDER BY created_at DESC
+        LIMIT 30
         """,
         user_id,
         ticker,
@@ -107,6 +109,7 @@ async def get_all_user_trades_for_account_for_ticker(
             AND account_id = $2
             AND symbol_ticker = $3
         ORDER BY created_at DESC
+        LIMIT 30
         """,
         user_id,
         account_id,
@@ -129,6 +132,7 @@ async def get_specific_trade(
         WHERE user_id = $1
             AND trade_id = $2
         ORDER BY created_at DESC
+        LIMIT 30
         """,
         user_id,
         trade_id,
@@ -153,6 +157,7 @@ async def get_all_user_trades_for_time(
         WHERE user_id = $1
             AND created_at BETWEEN $2 AND $3
         ORDER BY created_at DESC
+        LIMIT 30
         """,
         user_id,
         time_start,
@@ -182,6 +187,7 @@ async def get_all_user_trades_for_account_for_time(
             AND account_id = $2
             AND created_at BETWEEN $3 AND $4
         ORDER BY created_at DESC
+        LIMIT 30
         """,
         user_id,
         account_id,
@@ -210,6 +216,7 @@ async def get_all_user_trades_for_ticker_for_time(
             AND symbol_ticker = $2
             AND created_at BETWEEN $3 AND $4
         ORDER BY created_at DESC
+        LIMIT 30
         """,
         user_id,
         ticker,
@@ -242,6 +249,7 @@ async def get_all_user_trades_for_account_for_ticker_for_time(
             AND symbol_ticker = $3
             AND created_at BETWEEN $4 AND $5
         ORDER BY created_at DESC
+        LIMIT 30
         """,
         user_id,
         account_id,

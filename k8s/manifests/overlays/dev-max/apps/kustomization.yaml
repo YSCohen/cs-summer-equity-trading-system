@@ -5,9 +5,9 @@ resources:
   - ../../../base/apps
 
 images:
-  # - name: ghcr.io/sm26-industrial-software-dev/api
-  #   newName: ghcr.io/maxrabz/fastapi
-  # # newTag: working
+   - name: ghcr.io/sm26-industrial-software-dev/api
+     newName: ghcr.io/maxrabz/fastapi
+     newTag: latest
   # - name: ghcr.io/sm26-industrial-software-dev/web-ui
   #   newName: ghcr.io/williamtrump/equity-trading-frontend
   # - name: ghcr.io/sm26-industrial-software-dev/db-syncer
@@ -44,3 +44,35 @@ patches:
       spec:
         maxReplicas: 20 # Max's custom pod limit
         minReplicas: 10 # He can also override the minimum here if he wants!
+  - target:
+      kind: ScaledObject
+      name: fastapi-scaler
+      namespace: backend
+    patch: |-
+      - op: replace
+        # Targets the 3rd trigger (index 2: cpu=0, memory=1, prometheus=2)
+        path: /spec/triggers/2/metadata/threshold
+        value: "100"
+      - op: replace
+        path: /spec/advanced/horizontalPodAutoscalerConfig/behavior/scaleDown/stabilizationWindowSeconds
+        # Reduced seconds for faster local testing
+        value: 300
+  # - target:
+  #     kind: ScaledObject
+  #     name: fastapi-scaler
+  #     namespace: backend
+  #   patch: |-
+  #     - op: replace
+  #       path: /spec/triggers
+  #       value:
+  #         - type: prometheus
+  #           metadata:
+  #             serverAddress: http://loki-stack-prometheus-server.monitoring.svc.cluster.local
+  #             metricName: fastapi_internal_rps
+  #             threshold: "100"
+  #             query: |
+  #               sum(rate(http_requests_total[1m]))
+  #     - op: replace
+  #       path: /spec/advanced/horizontalPodAutoscalerConfig/behavior/scaleDown/stabilizationWindowSeconds
+  #       # Reduced seconds for faster local testing
+  #       value: 300
