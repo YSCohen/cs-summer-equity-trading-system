@@ -23,6 +23,10 @@ async def create_new_account(account_name: str, can_short: bool, user_id: str):
 
     # Grab User to add Account to them
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    if raw_user is None:
+        raise HTTPException(
+            status_code=503, detail="The database has crashed, try again later"
+        )
     user_data = json.loads(raw_user)
 
     user_data["accounts_associated"].append(account_id)
@@ -34,15 +38,19 @@ async def create_new_account(account_name: str, can_short: bool, user_id: str):
 
 
 async def add_account_to_user(account_id: str, user_id: str):
+    # Grab User to add account to them
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    if raw_user is None:
+        raise HTTPException(
+            status_code=503, detail="The database has crashed, try again later"
+        )
+    user_data = json.loads(raw_user)
+
     # Get account to ensure it exists
     raw_account = await redis_client.hget(redis_dictionaries[1], account_id)
     if not raw_account:
         logger.warning("Invalid account given")
         raise HTTPException(status_code=404, detail="This account does not exist")
-
-    # Grab User to add account to them
-    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
-    user_data = json.loads(raw_user)
 
     user_data["accounts_associated"].append(account_id)
     user_data["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -55,14 +63,18 @@ async def add_account_to_user(account_id: str, user_id: str):
 async def change_account_short_perms(
     account_id: str, account_name: str, can_short: bool, user_id: str
 ):
+    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    if raw_user is None:
+        raise HTTPException(
+            status_code=503, detail="The database has crashed, try again later"
+        )
+    user_data = json.loads(raw_user)
+
     # Get account to ensure it exists
     raw_account = await redis_client.hget(redis_dictionaries[1], account_id)
     if not raw_account:
         logger.warning("Invalid account given")
         raise HTTPException(status_code=404, detail="This account does not exist")
-
-    raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
-    user_data = json.loads(raw_user)
 
     if account_id not in user_data["accounts_associated"]:
         logger.warning("Invalid accound_id for user")
@@ -92,6 +104,10 @@ async def change_account_short_perms(
 async def get_all_users_accounts(user_id: str):
 
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    if raw_user is None:
+        raise HTTPException(
+            status_code=503, detail="The database has crashed, try again later"
+        )
     user_data = json.loads(raw_user)
 
     account_name = []

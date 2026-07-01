@@ -16,6 +16,10 @@ async def individual_trade(user_id: str, trade: dict):
 
     # Ensure it's a valid user
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
+    if raw_user is None:
+        raise HTTPException(
+            status_code=503, detail="The database has crashed, try again later"
+        )
     user_data = json.loads(raw_user)
 
     # Ensure it's a valid account
@@ -78,7 +82,9 @@ async def individual_trade(user_id: str, trade: dict):
     packed_bytes = msgpack.packb(payload)
 
     lock = redis_client.lock(
-        f"position:{trade['account_id']}:{trade['ticker']}", timeout=30
+        f"position:{trade['account_id']}:{trade['ticker']}",
+        timeout=30,
+        blocking_timeout=5,
     )
 
     async with lock:

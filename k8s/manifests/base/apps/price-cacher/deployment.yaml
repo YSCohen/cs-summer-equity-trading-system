@@ -32,7 +32,10 @@ spec:
           imagePullPolicy: Always
           env:
             - name: REDIS_URL
-              value: "redis://redis.data.svc.cluster.local:6379/"
+              valueFrom:
+                configMapKeyRef:
+                  name: redis-config
+                  key: REDIS_URL
 
             - name: LOKI_URL
               value: "http://loki-stack.monitoring.svc.cluster.local:3100"

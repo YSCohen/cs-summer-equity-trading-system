@@ -15,6 +15,8 @@ def render_enter_trade_page():
         st.session_state.reviewing = False
     if "editing_trade_index" not in st.session_state:
         st.session_state.editing_trade_index = None
+    if "last_submission_result" not in st.session_state:
+        st.session_state.last_submission_result = None
 
     if st.session_state.reviewing:
         _render_review_step()
@@ -43,6 +45,13 @@ def _trade_row(trade, key_prefix, index):
 
 
 def _render_review_step():
+    # If a submission just succeeded, show only the success state --
+    # don't keep rendering the stale Review Trades cards/Submit button
+    # underneath it.
+    if st.session_state.get("last_submission_result"):
+        _render_post_submission_state()
+        return
+
     st.subheader("Review Trades")
 
     for i, trade in enumerate(st.session_state.trade_queue):
@@ -65,12 +74,27 @@ def _render_review_step():
         result = submit_trades(payload)
 
         if result["status"] == "success":
-            st.success(f"All {len(payload)} trades submitted successfully.")
-            _render_submission_results(payload, result["data"])
+            # Stash the result so the post-submission state can render
+            # it, then clear the queue. Don't reset "reviewing" yet --
+            # that happens when the user clicks "Book More Trades".
+            st.session_state.last_submission_result = (payload, result["data"])
             st.session_state.trade_queue = []
-            st.session_state.reviewing = False
+            st.rerun()
         else:
             st.error(f"Submission failed: {result['message']}")
+
+
+def _render_post_submission_state():
+    payload, data = st.session_state.last_submission_result
+    st.success(f"All {len(payload)} trades submitted successfully.")
+    _render_submission_results(payload, data)
+
+    st.divider()
+    if st.button("➕ Book More Trades", type="primary"):
+        st.session_state.last_submission_result = None
+        st.session_state.reviewing = False
+        st.session_state.editing_trade_index = None
+        st.rerun()
 
 
 def _render_submission_results(payload, data):
