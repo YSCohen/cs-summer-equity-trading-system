@@ -83,9 +83,9 @@ async def get_all_users_positions(user_id: str):
                 "account_name": position_uuid_to_account_name[position_uuid],
                 "symbol_ticker": position["symbol_ticker"],
                 "quantity": position["quantity"],
-                "current_price": market["current_price"],
+                "latest_price": market["latest_price"],
                 "open_price": market["open_price"],
-                "position_value": position["quantity"] * market["current_price"],
+                "position_value": position["quantity"] * market["latest_price"],
                 "created_at": position["created_at"],
                 "updated_at": position["updated_at"],
             }
@@ -147,14 +147,13 @@ async def get_all_accounts_positions(account_id: str, user_id: str):
             continue
         symbol_market_data[ticker] = json.loads(value)
 
-    for x in real_positions:
-        x_positions = json.loads(x)
+    for x_positions in real_positions:
         market = x_positions["symbol_ticker"]
         positions[x_positions["symbol_ticker"]] = {
             "quantity": x_positions["quantity"],
-            "current_price": market["current_price"],
+            "latest_price": market["latest_price"],
             "open_price": market["open_price"],
-            "position_value": x_positions["quantity"] * market["current_price"],
+            "position_value": x_positions["quantity"] * market["latest_price"],
             "created_at": x_positions["created_at"],
             "updated_at": x_positions["updated_at"],
         }
@@ -211,10 +210,10 @@ async def get_all_users_ticker_positions(ticker: str, user_id: str):
                     "account_name": position_uuid_set[position_uuid],
                     "symbol_ticker": real_position_data["symbol_ticker"],
                     "quantity": real_position_data["quantity"],
-                    "current_price": real_symbol_data["current_price"],
+                    "latest_price": real_symbol_data["latest_price"],
                     "open_price": real_symbol_data["open_price"],
                     "position_value": real_position_data["quantity"]
-                    * real_symbol_data["current_price"],
+                    * real_symbol_data["latest_price"],
                     "created_at": real_position_data["created_at"],
                     "updated_at": real_position_data["updated_at"],
                 }
@@ -259,10 +258,10 @@ async def get_account_ticker_position(ticker: str, account_id: str, user_id: str
         if x_positions["symbol_ticker"] == ticker:  # Correct account and ticker
             positions[x_positions["symbol_ticker"]] = {
                 "quantity": x_positions["quantity"],
-                "current_price": real_symbol_data["current_price"],
+                "latest_price": real_symbol_data["latest_price"],
                 "open_price": real_symbol_data["open_price"],
                 "position_value": x_positions["quantity"]
-                * real_symbol_data["current_price"],
+                * real_symbol_data["latest_price"],
             }
             break  # only one account and one ticker
     return positions

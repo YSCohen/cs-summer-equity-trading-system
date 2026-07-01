@@ -11,7 +11,7 @@ class EquityTradingUser(HttpUser):
         "AAPL",
         "MSFT",
         "AMZN",
-        "GOOGL",
+        "GOOG",
         "META",
         "NVDA",
         "JPM",
