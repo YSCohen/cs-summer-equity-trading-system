@@ -26,5 +26,6 @@ RUN cp target/$RUST_TARGET/release/$BIN_NAME /app-binary
 
 
 FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app-binary /app-binary
 CMD ["/app-binary"]
