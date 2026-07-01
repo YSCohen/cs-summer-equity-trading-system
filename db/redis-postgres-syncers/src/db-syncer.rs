@@ -15,7 +15,7 @@ async fn main() {
     let _ = dotenv();
 
     if let Err(err) = helpers::init_tracing("db-syncer") {
-        eprintln!("failed to initialize tracing: {err}");
+        eprintln!("failed to initialize tracing: {:?}", err);
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
@@ -24,7 +24,7 @@ async fn main() {
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
-        error!(%err, "Fatal application initialization error");
+        error!(?err, "Fatal application initialization error");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
@@ -87,8 +87,12 @@ fn parse_json_row<T: DeserializeOwned>(
     id: &str,
     json_str: &str,
 ) -> Result<T, String> {
-    serde_json::from_str(json_str)
-        .map_err(|err| format!("Skipping: Failed to parse JSON for {entity_name} {id}: {err}"))
+    serde_json::from_str(json_str).map_err(|err| {
+        format!(
+            "Skipping: Failed to parse JSON for {entity_name} {id}: {:?}",
+            err
+        )
+    })
 }
 
 fn build_upsert_sql(
@@ -143,7 +147,7 @@ async fn sync_json_hash_table<T>(
         let data = match (spec.parse_row)(&id_str, &json_str) {
             Ok(data) => data,
             Err(err) => {
-                error!("{err}");
+                error!(?err);
                 skipped += 1;
                 continue;
             }
@@ -207,7 +211,7 @@ async fn sync_json_hash_table<T>(
             );
         }
         Err(err) => {
-            error!("failed to initialize postgres COPY context: {err}");
+            error!(?err, "failed to initialize postgres COPY context");
         }
     }
 

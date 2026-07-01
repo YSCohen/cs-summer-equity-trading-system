@@ -17,7 +17,7 @@ async fn main() {
     let _ = dotenv();
 
     if let Err(err) = helpers::init_tracing("trade-writer") {
-        eprintln!("failed to initialize tracing: {err}");
+        eprintln!("failed to initialize tracing: {:?}", err);
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
@@ -26,7 +26,7 @@ async fn main() {
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
-        error!(%err, "Fatal application initialization error");
+        error!(?err, "Fatal application initialization error");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
