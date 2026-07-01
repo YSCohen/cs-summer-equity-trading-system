@@ -15,7 +15,7 @@ async fn main() {
     let _ = dotenv();
 
     if let Err(err) = helpers::init_tracing("price-cacher") {
-        eprintln!("failed to initialize tracing: {err}");
+        eprintln!("failed to initialize tracing: {:?}", err);
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
@@ -24,7 +24,7 @@ async fn main() {
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
-        error!(%err, "Fatal application initialization error");
+        error!(?err, "Fatal error");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
@@ -81,9 +81,9 @@ async fn update_all_cached_prices(
 
 #[derive(Serialize)]
 struct MarketData {
-    current_price: f64,
     open_price: f64,
-    timestamp: String,
+    latest_price: f64,
+    latest_time: String,
 }
 
 async fn get_quote_json(symbol: &str) -> Result<String, Box<dyn Error>> {
@@ -98,14 +98,14 @@ async fn get_quote_json(symbol: &str) -> Result<String, Box<dyn Error>> {
     let last_quote = quotes.last().ok_or("No current price data found")?;
 
     let data = MarketData {
-        current_price: last_quote.close,
         open_price: first_quote.open,
+        latest_price: last_quote.close,
         // ts will be string formatted in ISO 8601 - YYYY-MM-DDTHH:MM:SSZ
-        timestamp: Timestamp::from_second(last_quote.timestamp as i64)?.to_string(),
+        latest_time: Timestamp::from_second(last_quote.timestamp as i64)?.to_string(),
     };
 
-    Ok(serde_json::to_string_pretty(&data)?)
-    // Ok(serde_json::to_string(&data)?)
+    // Ok(serde_json::to_string_pretty(&data)?)
+    Ok(serde_json::to_string(&data)?)
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,10 +115,8 @@ struct Record {
 }
 
 async fn fetch_sp500_symbols() -> Result<Vec<String>, Box<dyn Error>> {
-    debug!("fetching S&P 500 symbol list...");
-
-    let url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv";
-    let response = reqwest::get(url).await?.text().await?;
+    let response = reqwest::get("https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv").await?.text().await?;
+    debug!("fetched S&P 500 csv");
 
     let mut rdr = csv::Reader::from_reader(response.as_bytes());
     let mut symbols = Vec::new();
@@ -129,7 +127,7 @@ async fn fetch_sp500_symbols() -> Result<Vec<String>, Box<dyn Error>> {
         let formatted_symbol = record.symbol.replace('.', "-");
         symbols.push(formatted_symbol);
     }
+    debug!("parsed S&P 500 csv into symbol Vec");
 
-    debug!("successfully retrieved S&P 500 symbol list");
     Ok(symbols)
 }
