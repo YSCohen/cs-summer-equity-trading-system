@@ -12,9 +12,17 @@ FROM --platform=$BUILDPLATFORM lukemathwalker/cargo-chef:latest AS builder
 
 RUN apt-get update && apt-get install -y \
     musl-tools \
-    gcc-aarch64-linux-gnu \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 #   ^ reduce layer size by deleting apt lists
+
+# Download and install the aarch64-linux-musl cross-compiler toolchain
+RUN wget https://musl.cc/aarch64-linux-musl-cross.tgz && \
+    tar -xzf aarch64-linux-musl-cross.tgz -C /usr/local && \
+    rm aarch64-linux-musl-cross.tgz
+
+# Add the new toolchain to PATH
+ENV PATH="/usr/local/aarch64-linux-musl-cross/bin:${PATH}"
 
 ARG TARGETARCH
 ARG RUST_ARCH=${TARGETARCH/amd64/x86_64}
@@ -23,8 +31,12 @@ ENV RUST_TARGET=${RUST_ARCH}-unknown-linux-musl
 
 # for compiling x64 use musl-gcc
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc
-# for cross-compiling to arm64, link with GNU aarch64 compiler
-ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
+ENV CC_x86_64_unknown_linux_musl=musl-gcc
+
+# for cross-compiling to arm64, link with MUSL aarch64 compiler
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc
+ENV CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc
+ENV CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++
 
 RUN rustup target add $RUST_TARGET
 
