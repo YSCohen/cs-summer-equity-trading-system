@@ -102,7 +102,7 @@ def _render_positions_result(result, empty_message="No positions found.", accoun
         st.divider()
 
 
-@st.fragment(run_every="15s")
+@st.fragment(run_every="6s")
 def _all_positions_fragment():
     result = get_all_positions()
     if result["status"] != "success":
