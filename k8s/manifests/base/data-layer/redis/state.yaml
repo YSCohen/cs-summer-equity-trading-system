@@ -26,8 +26,8 @@ spec:
               cpu: "50m"
               memory: "64Mi"
             limits:
-              cpu: "200m"
-              memory: "128Mi"
+              cpu: "250m"
+              memory: "256Mi"
           volumeMounts:
             - name: config-volume
               mountPath: /usr/local/etc/redis/redis.conf
