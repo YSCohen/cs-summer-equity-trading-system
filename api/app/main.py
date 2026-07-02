@@ -6,6 +6,7 @@ from app.core.redis import redis_client
 from app.core.logging import logger
 from app.services import ticker_service
 from app.middleware.logging_middleware import logging_middleware
+import time
 
 from app.routers import (
     auth,
@@ -39,18 +40,20 @@ async def lifespan(app: FastAPI):
         logger.error(f"Redis startup failure: {e}")
         raise
 
-    try:
+    start = 0
+
+    while start < 5:
         ticker_service.valid_tickers = await ticker_service.load_sp500()
-
         if len(ticker_service.valid_tickers) == 0:
-            logger.warning("No valid tickers found")
-            raise Exception("No valid tickers found")
-
-        logger.info("Loaded S&P Tickers")
-
-    except Exception as e:
-        logger.error(f"Ticker load failure: {e}")
-        raise
+            logger.warning("No valid tickers found, retrying in 5 seconds")
+            start += 1
+            time.sleep(5)
+        else:
+            logger.info("Loaded S&P Tickers")
+            break
+    if len(ticker_service.valid_tickers) == 0:
+        logger.error("No valid tickers found after 5 attempts")
+        raise Exception("No valid tickers found after 5 attempts")
 
     yield
 

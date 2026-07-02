@@ -32,18 +32,6 @@ patches:
                 env:
                   - name: ENVIRONMENT
                     value: "dev-max"
-
-  - target:
-      kind: HorizontalPodAutoscaler
-      name: fastapi-hpa
-    patch: |-
-      apiVersion: autoscaling/v2
-      kind: HorizontalPodAutoscaler
-      metadata:
-        name: fastapi-hpa
-      spec:
-        maxReplicas: 20 # Max's custom pod limit
-        minReplicas: 10 # He can also override the minimum here if he wants!
   - target:
       kind: ScaledObject
       name: fastapi-scaler
@@ -52,11 +40,17 @@ patches:
       - op: replace
         # Targets the 3rd trigger (index 2: cpu=0, memory=1, prometheus=2)
         path: /spec/triggers/2/metadata/threshold
-        value: "100"
+        value: "40"
       - op: replace
         path: /spec/advanced/horizontalPodAutoscalerConfig/behavior/scaleDown/stabilizationWindowSeconds
         # Reduced seconds for faster local testing
         value: 300
+      - op: add
+        path: /spec/maxReplicaCount
+        value: 20
+      - op: add
+        path: /spec/minReplicaCount
+        value: 10
   # - target:
   #     kind: ScaledObject
   #     name: fastapi-scaler
@@ -76,3 +70,9 @@ patches:
   #       path: /spec/advanced/horizontalPodAutoscalerConfig/behavior/scaleDown/stabilizationWindowSeconds
   #       # Reduced seconds for faster local testing
   #       value: 300
+  #     - op: add
+  #       path: /spec/maxReplicaCount
+  #       value: 20
+  #     - op: add
+  #       path: /spec/minReplicaCount
+  #       value: 10

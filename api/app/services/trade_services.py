@@ -22,12 +22,16 @@ async def individual_trade(user_id: str, trade: dict):
         )
     user_data = json.loads(raw_user)
 
+    #redis_user_get_duration = time.perf_counter() - start
+
     # Ensure it's a valid account
     raw_account = await redis_client.hget(redis_dictionaries[1], trade["account_id"])
     if not raw_account:
         logger.warning("Invalid account_id for booking")
         raise HTTPException(status_code=404, detail="This account does not exist")
     account_data = json.loads(raw_account)
+
+    #redis_account_get_duration = time.perf_counter() - redis_user_get_duration - start
 
     # Confirm you have access to this account
     if trade["account_id"] not in user_data["accounts_associated"]:
@@ -61,6 +65,13 @@ async def individual_trade(user_id: str, trade: dict):
     else:
         trade["other_account"] = None
 
+    # trade_validation_duration = (
+    #     time.perf_counter()
+    #     - redis_account_get_duration
+    #     - redis_user_get_duration
+    #     - start
+    # )
+
     trade_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     now_str = now.isoformat()
@@ -81,6 +92,14 @@ async def individual_trade(user_id: str, trade: dict):
     # Pack to raw binary
     packed_bytes = msgpack.packb(payload)
 
+    # lock_init_duration = (
+    #     time.perf_counter()
+    #     - trade_validation_duration
+    #     - redis_account_get_duration
+    #     - redis_user_get_duration
+    #     - start
+    # )
+
     lock = redis_client.lock(
         f"position:{trade['account_id']}:{trade['ticker']}",
         timeout=30,
@@ -95,6 +114,15 @@ async def individual_trade(user_id: str, trade: dict):
             pipe.hget(redis_dictionaries[2], position_uuid)
 
         results = await pipe.execute()
+
+        # redis_position_get_duration = (
+        #     time.perf_counter()
+        #     - lock_init_duration
+        #     - trade_validation_duration
+        #     - redis_account_get_duration
+        #     - redis_user_get_duration
+        #     - start
+        # )
 
         for position_uuid, raw_position in zip(account_data["positions"], results):
             if raw_position is None:
@@ -120,6 +148,16 @@ async def individual_trade(user_id: str, trade: dict):
                 )  # Save what the new position will be
 
                 break  # only one account and one ticker
+
+        # position_calculation_duration = (
+        #     time.perf_counter()
+        #     - redis_position_get_duration
+        #     - lock_init_duration
+        #     - trade_validation_duration
+        #     - redis_account_get_duration
+        #     - redis_user_get_duration
+        #     - start
+        # )
 
         if new_position is None:  # This position does not currently exist
             if trade["direction"] != "Buy" and not account_data["can_short"]:
@@ -164,9 +202,42 @@ async def individual_trade(user_id: str, trade: dict):
             )
             logger.info("Updated existing position for account")
 
+    # position_update_duration = (
+    #     time.perf_counter()
+    #     - position_calculation_duration
+    #     - redis_position_get_duration
+    #     - lock_init_duration
+    #     - trade_validation_duration
+    #     - redis_account_get_duration
+    #     - redis_user_get_duration
+    #     - start
+    # )
+
     # High Efficiency: Save to a single field named "d"
     await redis_client.xadd(TRADE_STREAM, {"d": packed_bytes})
     duration_ms = (time.perf_counter() - start) * 1000
+    # Xadd_to_stream_duration = (
+    #     time.perf_counter()
+    #     - position_update_duration
+    #     - position_calculation_duration
+    #     - redis_position_get_duration
+    #     - lock_init_duration
+    #     - trade_validation_duration
+    #     - redis_account_get_duration
+    #     - redis_user_get_duration
+    #     - start
+    # )
+    # logger.warning(
+    #     f"Trade validation took {trade_validation_duration * 1000:2f}ms, "
+    #     f"Redis user get took {redis_user_get_duration * 1000:2f}ms, "
+    #     f"Redis account get took {redis_account_get_duration * 1000:2f}ms, "
+    #     f"Lock init took {lock_init_duration * 1000:2f}ms, "
+    #     f"Redis position get took {redis_position_get_duration * 1000:2f}ms, "
+    #     f"Position calculation took {position_calculation_duration * 1000:2f}ms, "
+    #     f"Position update took {position_update_duration * 1000:2f}ms, "
+    #     f"Xadd to stream took {Xadd_to_stream_duration * 1000:2f}ms, "
+    #     f"Succesfully booked a trade. Completed in {duration_ms:2f}ms"
+    # )
     logger.info(f"Succesfully booked a trade. Completed in {duration_ms:2f}ms")
 
     return {"status": "success", "trade_id": f"{trade_id}"}

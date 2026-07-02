@@ -1,8 +1,10 @@
 from fastapi import Request, HTTPException
+from fastapi.responses import JSONResponse
 from redis.exceptions import RedisError
 import time
 import asyncpg
 from app.core.logging import logger
+from app.core.redis import pool
 
 
 async def logging_middleware(request: Request, call_next):
@@ -19,6 +21,8 @@ async def logging_middleware(request: Request, call_next):
             f"in {duration_ms:.2f}ms"
         )
 
+        #logger.info(f"Available connections: {len(pool._available_connections)}, In use: {len(pool._in_use_connections)}")
+
         if response.status_code >= 500:
             logger.error(message)
         elif response.status_code >= 400:
@@ -32,16 +36,22 @@ async def logging_middleware(request: Request, call_next):
         raise
 
     except asyncpg.PostgresError as e:
-        logger.error(f"PostgreSQL failure: {e}")
-
-        raise HTTPException(status_code=503, detail="Database unavailable")
+        logger.exception(f"PostgreSQL failure: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Database unavailable"},
+        )
 
     except RedisError as e:
-        logger.error(f"Redis failure: {e}")
+        logger.exception(f"Redis failure: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Redis unavailable"},
+        )
 
-        raise HTTPException(status_code=503, detail="Redis unavailable")
-
-    except Exception as e:
-        logger.error(f"Unhandled exception: {e}")
-
-        raise HTTPException(status_code=500, detail="Internal server error")
+    except Exception:
+        logger.exception("Unhandled exception")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
