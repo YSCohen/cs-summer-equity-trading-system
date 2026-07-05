@@ -45,7 +45,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
     tokio::spawn(async move {
         if let Err(e) = connection.await {
-            error!("postgres connection driver error: {}", e);
+            error!(?e, "postgres connection driver error");
         }
     });
     debug!("connected to postgres");

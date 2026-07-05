@@ -46,7 +46,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
     tokio::spawn(async move {
         if let Err(e) = connection.await {
-            error!("PostgreSQL connection driver error: {}", e);
+            error!(?e, "PostgreSQL connection driver error");
         }
     });
     debug!("connected to postgres");
@@ -65,7 +65,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         if e.to_string().contains("BUSYGROUP") {
             debug!("Consumer group '{}' already exists", consumer_group);
         } else {
-            error!("Initializing consumer group failed: {}", e);
+            error!(?e, "Initializing consumer group failed");
         }
     }
 
@@ -94,9 +94,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 match res {
                     Ok(r) => r,
                     Err(e) => {
-                        warn!("Redis stream read failed: {}", e);
+                        error!(?e, "Redis stream read failed");
                         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                        continue;
+                        std::process::exit(1);
                     }
                 }
             }
@@ -125,7 +125,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             if let Err(e) =
                 ack_and_trim_stream(&mut redis_conn, &stream_name, &consumer_group, &msg_ids).await
             {
-                error!("Failed to ACK and trim messages in Redis: {}", e);
+                error!(?e, "Failed to ACK and trim bad messages in Redis");
             }
             continue;
         }
@@ -158,11 +158,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         "Successfully copied, ACK'd, and trimmed {} rows",
                         msg_ids.len()
                     ),
-                    Err(e) => error!("Failed to ACK and trim messages in Redis: {}", e),
+                    Err(e) => error!(?e, "Failed to ACK and trim messages in Redis"),
                 }
             }
             Err(e) => {
-                error!("Failed to initialize postgres COPY context: {}", e);
+                error!(?e, "Failed to initialize postgres COPY context");
             }
         }
     }
@@ -184,7 +184,7 @@ fn build_payload_buffer(copy_payload_buffer: &mut String, reply: StreamReadReply
             let trade: TradePayload = match rmp_serde::from_slice(bytes) {
                 Ok(t) => t,
                 Err(e) => {
-                    warn!("Failed to decode payload for {}: {}", record.id, e);
+                    warn!(?e, "Failed to decode payload for {}", record.id);
                     continue; // Skip badly serialized record
                 }
             };
@@ -241,9 +241,9 @@ struct TradePayload {
 
 fn log_postgres_error(context: &str, err: &tokio_postgres::Error) {
     if let Some(db_error) = err.as_db_error() {
-        error!("{}: {}", context, db_error);
+        error!(?db_error, "{}", context);
     } else {
-        error!("{}: {}", context, err);
+        error!(?err, "{}", context);
     }
 }
 
