@@ -21,9 +21,19 @@ sync-app: ## Fast-sync the apps layer (Usage: make sync-app)
 	@echo "[Syncing] Pulling latest source and reconciling 3-apps layer..."
 	@$(MAKE) --no-print-directory run CMD="flux reconcile kustomization 3-apps -n flux-system --with-source"
 
-sync:
-	$(DOCKER) exec -it k8s-toolbox flux reconcile source git dev-repo-sean
-	$(DOCKER) exec -it k8s-toolbox flux reconcile kustomization 1-infra --with-source
+sync: ## Force Flux to reconcile (Accepts LAYER=all, apps, or data-layer)
+	@echo "🔄 Forcing Flux to synchronize Git..."
+	@$(DOCKER) exec -it k8s-toolbox flux reconcile source git dev-repo-sean
+	@if [ "$(LAYER)" = "all" ] || [ -z "$(LAYER)" ]; then \
+		echo "🔄 Syncing all Kustomizations in dependency order..."; \
+		$(DOCKER) exec -it k8s-toolbox flux reconcile kustomization 1-infra --with-source; \
+		$(DOCKER) exec -it k8s-toolbox flux reconcile kustomization 2-data --with-source; \
+		$(DOCKER) exec -it k8s-toolbox flux reconcile kustomization 3-apps --with-source; \
+	elif [ "$(LAYER)" = "apps" ]; then \
+		$(DOCKER) exec -it k8s-toolbox flux reconcile kustomization 3-apps --with-source; \
+	elif [ "$(LAYER)" = "data-layer" ]; then \
+		$(DOCKER) exec -it k8s-toolbox flux reconcile kustomization 2-data --with-source; \
+	fi
 
 adminer-info: ## 🌐 Adminer UI: http://adminer.localhost:8080
 	@echo "🌐 Adminer UI: http://adminer.localhost:8080"
