@@ -25,6 +25,7 @@ from trade_history_pages import (
 )
 from enter_trade_page import render_enter_trade_page
 from persistent_login import restore_login_from_browser
+from mass_trade_page import render_mass_trade_page
 
 
 st.set_page_config(page_title="Equity Trading System", page_icon="📈", layout="wide")
@@ -79,6 +80,7 @@ else:
         "trades_by_account_ticker": ("📜 Trade History by Account & Ticker", "Trades by Account and Ticker"),
         "trade_by_id": ("🔍 Look Up Trade by ID", "Trade by ID"),
         "enter_trade": ("💸 Book a Trade", "Enter Trade"),
+        "mass_trade": ("📋 Mass Trade Booker", "Mass Trade Booker"),
         "create_account": ("➕ Open New Account", "Create Account"),
         "update_account": ("✏️ Edit Account Settings", "Update Account"),
         "update_trade": ("✏️ Edit Trade", "Update Trade"),
@@ -127,6 +129,7 @@ else:
 
     PAGE_RENDERERS = {
         "Enter Trade": render_enter_trade_page,
+        "Mass Trade Booker": render_mass_trade_page,
         "My Accounts": render_my_accounts_page,
         "All Positions": render_all_positions_page,
         "Positions by Account": render_positions_by_account_page,

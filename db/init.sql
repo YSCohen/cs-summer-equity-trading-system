@@ -22,7 +22,7 @@ CREATE INDEX idx_trades_user_account_created
 CREATE INDEX idx_trades_user_ticker_created
     ON trades (user_id, symbol_ticker, created_at DESC);
 
-CREATE INDEX idx_trades_user_ticker_created
+CREATE INDEX idx_trades_user_account_ticker_created
     ON trades (user_id, account_id, symbol_ticker, created_at DESC);
 
 CREATE TABLE positions (

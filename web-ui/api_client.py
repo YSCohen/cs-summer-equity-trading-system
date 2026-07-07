@@ -16,20 +16,17 @@ def _get_session():
 
 
 def _api_error(response):
-    """Pulls a clean error message out of a failed response, falling back to
-    raw text if the body isn't JSON (e.g. a 500 with no detail field).
-
-    Also guards against a specific edge case: if the browser remembered a
-    username via localStorage (see persistent_login.py) but the actual
-    backend session cookie didn't survive the reload, the UI would think
-    it's logged in while every real API call 401s. Rather than show that
-    confusingly on every page, treat a 401 here as "the remembered login
-    wasn't actually valid" and bounce back to a clean login screen."""
     if response.status_code == 401 and st.session_state.get("username"):
         from persistent_login import forget_login
         st.session_state.username = None
         st.session_state.pop("http", None)
+        st.session_state.pop("nav_page", None)
         forget_login()
+
+        for key in ["remember_user", "remember_session"]:
+            if key in st.query_params:
+                del st.query_params[key]
+
         st.warning("Your session expired. Please log in again.")
         st.rerun()
 
@@ -333,10 +330,16 @@ def get_user_accounts():
         return {"status": "error", "message": _api_error(response)}
 
 
-# No real endpoint for this yet -- kept as a mock.
-def update_user_account(account_id, data):
-    return {
-        "status": "success",
-        "account_id": account_id,
-        "updated": data,
-    }
+def update_user_account(account_id, account_name=None, can_short=None):
+    session = _get_session()
+    response = session.patch(
+        f"{API_BASE_URL}/users/update_account_details/{account_id}",
+        json={
+            "account_name": account_name,
+            "can_short": can_short,
+        },
+    )
+    if response.status_code == 200:
+        return {"status": "success", "data": response.json()}
+    else:
+        return {"status": "error", "message": _api_error(response)}

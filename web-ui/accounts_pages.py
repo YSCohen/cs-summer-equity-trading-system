@@ -62,19 +62,22 @@ def render_create_account_page():
 
 def render_update_account_page():
     st.header("✏️ Edit Account Settings")
-    st.caption("PUT /users/accounts/{account_id}")
+    st.caption("PATCH /users/update_account_details/{account_id}")
 
     account_id = account_select()
+    account_name = st.text_input("Account Name (leave blank to keep current)")
     can_short = st.checkbox("Can Short")
 
     if st.button("Update Account"):
         if not account_id:
             st.error("Select an account first.")
         else:
-            data = {
-                "username": st.session_state.username,
-                "can_short": can_short,
-            }
-            result = update_user_account(account_id, data)
-            st.success(f"Account `{result['account_id']}` updated.")
-            st.caption(f"Can Short: **{result['updated']['can_short']}**")
+            result = update_user_account(
+                account_id,
+                account_name=account_name or None,
+                can_short=can_short,
+            )
+            if result["status"] == "success":
+                st.success("Account updated successfully.")
+            else:
+                st.error(result["message"])
