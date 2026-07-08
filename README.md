@@ -12,3 +12,9 @@ We run a modern, containerized stack designed for speed and reliability:
 
 ### Getting Started
 Ready to jump in? Check out our [DEVELOPERS.md](DEVELOPERS.md) for a deep dive into how to set up your environment, manage overlays, and debug the cluster.
+
+#### K3S Manager option
+You can clone our k3s manager here 
+```sh 
+curl -sSL "https://raw.githubusercontent.com/SM26-Industrial-Software-Dev/equity-trading-system/main/k3s_manager.sh" -o k3s_manager.sh && chmod +x k3s_manager.sh
+```
