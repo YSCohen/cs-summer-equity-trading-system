@@ -4,13 +4,50 @@ use dotenvy::dotenv;
 use futures_util::SinkExt;
 use redis::AsyncCommands;
 use redis::streams::{
-    StreamDeletionPolicy, StreamReadOptions, StreamReadReply, StreamTrimOptions, StreamTrimmingMode,
+    StreamAutoClaimOptions, StreamAutoClaimReply, StreamDeletionPolicy, StreamId,
+    StreamReadOptions, StreamReadReply, StreamTrimOptions, StreamTrimmingMode,
 };
 use serde::Deserialize;
 use std::env;
 use std::fmt::Write;
+use tokio::time::{Duration, Instant};
 use tokio_postgres::NoTls;
 use tracing::{debug, error, info, warn};
+
+// ADJUSTABLE
+
+/// Max entries to pull per batch
+const BATCH_COUNT: usize = 5000; // TODO: determine optimal number
+
+/// How long a message must sit un-ACKed before another worker may reclaim it
+const RECLAIM_MIN_IDLE_MS: usize = 10_000;
+
+/// How often the main loop reclaims abandoned messages
+const RECLAIM_INTERVAL: Duration = Duration::from_secs(10);
+
+// PRE-ALLOCATED QUERY STRINGS
+
+/// COPY fresh messages straight into `trades` table
+const DIRECT_COPY_QUERY: &str = "COPY trades (trade_id, account_id, user_id, direction, symbol_ticker, created_at, updated_at, quantity, price, other_account) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')";
+
+/// create temp staging table, private to this connection and dropped on commit.
+/// concurrent workers running this statement won't clash
+const CREATE_STAGE_QUERY: &str =
+    "CREATE TEMP TABLE trades_stage (LIKE trades INCLUDING DEFAULTS) ON COMMIT DROP";
+
+/// COPY reclaimed messages into `trades_stage` table
+const STAGE_COPY_QUERY: &str = "COPY trades_stage (trade_id, account_id, user_id, direction, symbol_ticker, created_at, updated_at, quantity, price, other_account) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')";
+
+/// upsert staged rows from `trades_stage` into `trades` table.
+/// `DISTINCT ON` guards against duplicate ids within a single reclaim batch
+/// (which would otherwise abort the `ON CONFLICT`).
+const UPSERT_QUERY: &str = "INSERT INTO trades (trade_id, account_id, user_id, direction, symbol_ticker, created_at, updated_at, quantity, price, other_account) \
+    SELECT DISTINCT ON (trade_id) trade_id, account_id, user_id, direction, symbol_ticker, created_at, updated_at, quantity, price, other_account \
+    FROM trades_stage ORDER BY trade_id, updated_at DESC NULLS LAST \
+    ON CONFLICT (trade_id) DO UPDATE SET \
+    account_id = EXCLUDED.account_id, user_id = EXCLUDED.user_id, direction = EXCLUDED.direction, \
+    symbol_ticker = EXCLUDED.symbol_ticker, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, \
+    quantity = EXCLUDED.quantity, price = EXCLUDED.price, other_account = EXCLUDED.other_account";
 
 #[tokio::main]
 async fn main() {
@@ -43,7 +80,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     debug!("read env vars");
 
     // Connect to postgres
-    let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
+    let (mut pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
     tokio::spawn(async move {
         if let Err(e) = connection.await {
             error!(?e, "PostgreSQL connection driver error");
@@ -71,26 +108,37 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Pipeline engaged for stream '{}'", stream_name);
 
-    // start by processing pending messages ("0"), switch to new messages (">") later
-    let mut stream_id = "0".to_string();
-
     // buffer to hold bulk COPY data. Pre-allocating ~500KB to avoid reallocations
     let mut copy_payload_buffer = String::with_capacity(512_000);
 
-    // opts to fetch batches from the configured redis stream
+    // opts to fetch new messages (">") in batches from the configured redis stream
     let opts = StreamReadOptions::default()
         .group(&consumer_group, &worker_name)
-        .count(5000) // TODO: determine best number
+        // redis will wait for either BATCH_COUNT messages or 100ms, whichever is first
+        .count(BATCH_COUNT)
         .block(100);
 
-    loop {
-        // (these two vars need to be assigned because of lifetime witchcraft in the select macro)
-        let stream_name_arr = [&stream_name];
-        let stream_id_arr = [&stream_id];
+    let new_message_id: [&str; 1] = [">"];
 
+    // (needs to be assigned because of lifetime witchcraft in the select macro)
+    let stream_name_arr = [&stream_name];
+
+    // On startup, immediately reclaim messages abandoned by crashed workers
+    reclaim_abandoned(
+        &mut pg_client,
+        &mut redis_conn,
+        &stream_name,
+        &consumer_group,
+        &worker_name,
+        &mut copy_payload_buffer,
+    )
+    .await;
+    let mut last_reclaim = Instant::now();
+
+    loop {
         // Select between waiting for Redis stream entries or a shutdown signal:
         let reply: StreamReadReply = tokio::select! {
-            res = redis_conn.xread_options(&stream_name_arr, &stream_id_arr, &opts) => {
+            res = redis_conn.xread_options(&stream_name_arr, &new_message_id, &opts) => {
                 match res {
                     Ok(r) => r,
                     Err(e) => {
@@ -106,120 +154,291 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        if reply.keys.is_empty() || reply.keys[0].ids.is_empty() {
-            if stream_id == "0" {
-                info!("Finished processing pending entries, switching to new messages.");
-                stream_id = ">".to_string();
-            }
-            continue;
+        if !(reply.keys.is_empty() || reply.keys[0].ids.is_empty()) {
+            let ids: Vec<StreamId> = reply.keys.into_iter().flat_map(|key| key.ids).collect();
+            process_batch(
+                &mut pg_client,
+                &mut redis_conn,
+                &stream_name,
+                &consumer_group,
+                &mut copy_payload_buffer,
+                ids,
+                false,
+            )
+            .await;
         }
 
-        let msg_ids = build_payload_buffer(&mut copy_payload_buffer, reply);
-
-        // If we parsed 0 valid rows but have msg_ids, we must ACK them so they don't get stuck.
-        if copy_payload_buffer.is_empty() {
-            warn!(
-                "Decoded no valid rows, ACKing {} bad messages to discard them.",
-                msg_ids.len()
-            );
-            if let Err(e) =
-                ack_and_trim_stream(&mut redis_conn, &stream_name, &consumer_group, &msg_ids).await
-            {
-                error!(?e, "Failed to ACK and trim bad messages in Redis");
-            }
-            continue;
-        }
-
-        let copy_query = "COPY trades (trade_id, account_id, user_id, direction, symbol_ticker, created_at, updated_at, quantity, price, other_account) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')";
-
-        match pg_client.copy_in(copy_query).await {
-            Ok(sink) => {
-                tokio::pin!(sink);
-
-                // Send the entire batch over the network in one chunk
-                let chunk = bytes::Bytes::from(copy_payload_buffer.clone());
-
-                // If sending/closing fails, abort transaction and DO NOT ACK
-                if let Err(e) = sink.send(chunk).await {
-                    log_postgres_error("Streaming COPY failed (transaction aborted)", &e);
-                    continue;
-                }
-
-                if let Err(e) = sink.close().await {
-                    log_postgres_error("Finalizing COPY failed (transaction aborted)", &e);
-                    continue;
-                }
-
-                // xack and trim messages in redis ONLY after postgres confirms write
-                match ack_and_trim_stream(&mut redis_conn, &stream_name, &consumer_group, &msg_ids)
-                    .await
-                {
-                    Ok(()) => info!(
-                        "Successfully copied, ACK'd, and trimmed {} rows",
-                        msg_ids.len()
-                    ),
-                    Err(e) => error!(?e, "Failed to ACK and trim messages in Redis"),
-                }
-            }
-            Err(e) => {
-                error!(?e, "Failed to initialize postgres COPY context");
-            }
+        // Periodically sweep for messages abandoned by workers that have since
+        // crashed while we were running.
+        if last_reclaim.elapsed() >= RECLAIM_INTERVAL {
+            reclaim_abandoned(
+                &mut pg_client,
+                &mut redis_conn,
+                &stream_name,
+                &consumer_group,
+                &worker_name,
+                &mut copy_payload_buffer,
+            )
+            .await;
+            last_reclaim = Instant::now();
         }
     }
 }
 
-fn build_payload_buffer(copy_payload_buffer: &mut String, reply: StreamReadReply) -> Vec<String> {
+/// Reclaim messages that have been pending for longer than
+/// [`RECLAIM_MIN_IDLE_MS`], and process them into `copy_payload_buffer`.
+///
+/// This recovers messages orphaned when a worker crashes and is restarted under
+/// a new `WORKER_NAME`, and also retries this worker's own batches that failed
+/// to write and were never ACKed.
+async fn reclaim_abandoned(
+    pg_client: &mut tokio_postgres::Client,
+    redis_conn: &mut redis::aio::MultiplexedConnection,
+    stream_name: &str,
+    consumer_group: &str,
+    worker_name: &str,
+    copy_payload_buffer: &mut String,
+) {
+    // XAUTOCLAIM walks the group's pending list from this cursor; "0-0" starts at
+    // the beginning and each reply tells us where to resume (or "0-0" when done).
+    let mut cursor = "0-0".to_string();
+
+    loop {
+        let opts = StreamAutoClaimOptions::default().count(BATCH_COUNT);
+        let reply: StreamAutoClaimReply = match redis_conn
+            .xautoclaim_options(
+                stream_name,
+                consumer_group,
+                worker_name,
+                RECLAIM_MIN_IDLE_MS,
+                &cursor,
+                opts,
+            )
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                error!(?e, "failed to XAUTOCLAIM abandoned messages");
+                return;
+            }
+        };
+
+        if !reply.claimed.is_empty() {
+            info!("Reclaiming {} pending message(s)", reply.claimed.len());
+            process_batch(
+                pg_client,
+                redis_conn,
+                stream_name,
+                consumer_group,
+                copy_payload_buffer,
+                reply.claimed,
+                true,
+            )
+            .await;
+        }
+
+        // "0-0" means we've swept the whole pending list.
+        if reply.next_stream_id == "0-0" {
+            break;
+        }
+        cursor = reply.next_stream_id;
+    }
+}
+
+/// Decode a batch of stream entries, write them to postgres, and ACK+trim them
+/// in redis on success.
+///
+/// `use_staging` selects the write strategy: reclaimed messages may be
+/// duplicates, so they go through a staging table + upsert that updates on
+/// conflict, while fresh messages take the faster direct COPY path.
+async fn process_batch(
+    pg_client: &mut tokio_postgres::Client,
+    redis_conn: &mut redis::aio::MultiplexedConnection,
+    stream_name: &str,
+    consumer_group: &str,
+    copy_payload_buffer: &mut String,
+    ids: Vec<StreamId>,
+    use_staging: bool,
+) {
+    let msg_ids = build_payload_buffer(copy_payload_buffer, &ids);
+    if msg_ids.is_empty() {
+        return;
+    }
+
+    // If we parsed 0 valid rows but have msg_ids, we must ACK them so they don't get stuck.
+    if copy_payload_buffer.is_empty() {
+        warn!(
+            "Decoded no valid rows, ACK+trimming {} bad messages to discard them.",
+            msg_ids.len()
+        );
+        if let Err(e) = ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await
+        {
+            error!(?e, "Failed to ACK and trim bad messages in Redis");
+        }
+        return;
+    }
+
+    let write_result = if use_staging {
+        copy_via_staging(pg_client, copy_payload_buffer).await
+    } else {
+        copy_direct(pg_client, copy_payload_buffer).await
+    };
+
+    // xack and trim messages in redis ONLY after postgres confirms the write.
+    if write_result.is_ok() {
+        info!("Successfully copied {} rows", msg_ids.len());
+
+        match ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await {
+            Ok(()) => debug!("ACK+trimmed {} messages from redis stream", msg_ids.len()),
+            Err(e) => error!(
+                ?e,
+                "Failed to ACK+trim {} messages from redis stream",
+                msg_ids.len()
+            ),
+        }
+    }
+}
+
+/// COPY the payload buffer straight into `trades` table.
+///
+/// Used for fresh messages, which are not expected to collide. Returns `Err`
+/// (probably already logged) on failure so the caller knows not to ACK.
+async fn copy_direct(
+    pg_client: &tokio_postgres::Client,
+    copy_payload_buffer: &str,
+) -> Result<(), ()> {
+    let sink = match pg_client.copy_in(DIRECT_COPY_QUERY).await {
+        Ok(sink) => sink,
+        Err(e) => {
+            error!(?e, "Failed to initialize postgres COPY sink");
+            return Err(());
+        }
+    };
+    tokio::pin!(sink);
+
+    // Send the entire batch over the network in one chunk
+    let chunk = bytes::Bytes::from(copy_payload_buffer.to_owned());
+    if let Err(e) = sink.send(chunk).await {
+        log_postgres_error("Streaming COPY failed. transaction aborted", &e);
+        return Err(());
+    }
+    if let Err(e) = sink.close().await {
+        log_postgres_error("Finalizing COPY failed. transaction aborted", &e);
+        return Err(());
+    }
+    Ok(())
+}
+
+/// COPY the payload buffer into a transient per-transaction staging table, then
+/// upsert into `trades`.
+///
+/// Because the staging table is `TEMP ... ON COMMIT DROP`,
+/// it is private to this connection and cannot clash with other workers running
+/// the same statement concurrently. The upsert makes reprocessing a message
+/// idempotent instead of aborting the whole batch on a primary-key conflict.
+async fn copy_via_staging(
+    pg_client: &mut tokio_postgres::Client,
+    copy_payload_buffer: &str,
+) -> Result<(), ()> {
+    // use single `Transaction` for the whole thing
+    let tx = match pg_client.transaction().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            log_postgres_error("Failed to open db transaction (for staging)", &e);
+            return Err(());
+        }
+    };
+
+    if let Err(e) = tx.batch_execute(CREATE_STAGE_QUERY).await {
+        log_postgres_error("Failed to create staging table", &e);
+        return Err(());
+    }
+
+    // Scope the sink so it is dropped before we run the upsert on `tx`.
+    {
+        let sink = match tx.copy_in(STAGE_COPY_QUERY).await {
+            Ok(sink) => sink,
+            Err(e) => {
+                log_postgres_error("Failed to initialize staging COPY context", &e);
+                return Err(());
+            }
+        };
+        tokio::pin!(sink);
+
+        let chunk = bytes::Bytes::from(copy_payload_buffer.to_owned());
+        if let Err(e) = sink.send(chunk).await {
+            log_postgres_error("Streaming COPY into staging table failed", &e);
+            return Err(());
+        }
+        if let Err(e) = sink.close().await {
+            log_postgres_error("Finalizing COPY into staging table failed", &e);
+            return Err(());
+        }
+    }
+
+    if let Err(e) = tx.batch_execute(UPSERT_QUERY).await {
+        log_postgres_error("Upsert from staging table failed", &e);
+        return Err(());
+    }
+
+    if let Err(e) = tx.commit().await {
+        log_postgres_error("Committing staging transaction failed", &e);
+        return Err(());
+    }
+
+    Ok(())
+}
+
+fn build_payload_buffer(copy_payload_buffer: &mut String, ids: &[StreamId]) -> Vec<String> {
     let mut msg_ids = Vec::new();
     copy_payload_buffer.clear(); // Clear the buffer for the new batch
 
-    for stream_key in reply.keys {
-        for record in stream_key.ids {
-            msg_ids.push(record.id.clone());
+    for record in ids {
+        msg_ids.push(record.id.clone());
 
-            let Some(redis::Value::BulkString(bytes)) = record.map.get("d") else {
-                warn!("Redis message {} missing binary field 'd'", record.id);
-                continue; // Skip malformed record
-            };
+        let Some(redis::Value::BulkString(bytes)) = record.map.get("d") else {
+            warn!("Redis message {} missing binary field 'd'", record.id);
+            continue; // Skip malformed record
+        };
 
-            let trade: TradePayload = match rmp_serde::from_slice(bytes) {
-                Ok(t) => t,
-                Err(e) => {
-                    warn!(?e, "Failed to decode payload for {}", record.id);
-                    continue; // Skip badly serialized record
-                }
-            };
+        let trade: TradePayload = match rmp_serde::from_slice(bytes) {
+            Ok(t) => t,
+            Err(e) => {
+                warn!(?e, "Failed to decode payload for {}", record.id);
+                continue; // Skip badly serialized record
+            }
+        };
 
-            let created = jiff::Timestamp::from_second(trade.created_at).map_or_else(
-                |_| "\\N".to_string(),
-                |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
-            );
+        let created = jiff::Timestamp::from_second(trade.created_at).map_or_else(
+            |_| "\\N".to_string(),
+            |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
+        );
 
-            let updated = jiff::Timestamp::from_second(trade.updated_at).map_or_else(
-                |_| "\\N".to_string(),
-                |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
-            );
+        let updated = jiff::Timestamp::from_second(trade.updated_at).map_or_else(
+            |_| "\\N".to_string(),
+            |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
+        );
 
-            let other_acc = trade
-                .other_account
-                .as_deref()
-                .filter(|value| !value.is_empty())
-                .unwrap_or("\\N");
+        let other_acc = trade
+            .other_account
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .unwrap_or("\\N");
 
-            let _ = writeln!(
-                copy_payload_buffer,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                trade.trade_id,
-                trade.account_id,
-                trade.user_id,
-                trade.direction,
-                trade.symbol_ticker,
-                created,
-                updated,
-                trade.quantity,
-                trade.price,
-                other_acc
-            );
-        }
+        let _ = writeln!(
+            copy_payload_buffer,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            trade.trade_id,
+            trade.account_id,
+            trade.user_id,
+            trade.direction,
+            trade.symbol_ticker,
+            created,
+            updated,
+            trade.quantity,
+            trade.price,
+            other_acc
+        );
     }
 
     msg_ids
@@ -241,9 +460,9 @@ struct TradePayload {
 
 fn log_postgres_error(context: &str, err: &tokio_postgres::Error) {
     if let Some(db_error) = err.as_db_error() {
-        error!(?db_error, "{}", context);
+        error!(?db_error, context);
     } else {
-        error!(?err, "{}", context);
+        error!(?err, context);
     }
 }
 
