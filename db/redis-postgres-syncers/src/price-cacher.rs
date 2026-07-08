@@ -5,7 +5,6 @@ use dotenvy::dotenv;
 use jiff::Timestamp;
 use redis::aio::MultiplexedConnection;
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::error::Error;
 use tracing::{debug, error, info};
 use yahoo_finance_api as yahoo;
@@ -31,23 +30,19 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = dotenv();
-
-    let redis_url = env::var("REDIS_URL").map_err(|_| "REDIS_URL must be set")?;
-    let interval: u64 = env::var("DELAY")
-        .map_err(|_| "DELAY must be set")?
+    let redis_url = helpers::require_env("REDIS_URL")?;
+    let interval: u64 = helpers::require_env("DELAY")?
         .parse()
         .map_err(|_| "DELAY must be an int")?;
 
     debug!("read env vars");
 
-    // connect to redis
-    let redis_client = redis::Client::open(redis_url)?;
-    let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
-    debug!("connected to redis");
+    let mut redis_conn = helpers::connect_redis(redis_url).await?;
+
+    let symbols = fetch_sp500_symbols().await?;
 
     loop {
-        update_all_cached_prices(&mut redis_conn).await?;
+        update_all_cached_prices(&mut redis_conn, &symbols).await?;
         info!("updated all cached prices");
 
         tokio::select! {
@@ -62,14 +57,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn update_all_cached_prices(
     redis_conn: &mut MultiplexedConnection,
+    symbols: &[String],
 ) -> Result<(), Box<dyn Error>> {
     let mut pipe = redis::pipe();
 
-    let sp500_symbols = fetch_sp500_symbols().await?;
-
-    for symbol in sp500_symbols {
-        let quote = get_quote_json(&symbol).await?;
-        pipe.hset("market_prices", &symbol, &quote);
+    for symbol in symbols {
+        let quote = get_quote_json(symbol).await?;
+        pipe.hset("market_prices", symbol, &quote);
     }
     debug!("wrote quotes for all symbols to pipe...");
 
@@ -104,7 +98,6 @@ async fn get_quote_json(symbol: &str) -> Result<String, Box<dyn Error>> {
         latest_time: Timestamp::from_second(last_quote.timestamp as i64)?.to_string(),
     };
 
-    // Ok(serde_json::to_string_pretty(&data)?)
     Ok(serde_json::to_string(&data)?)
 }
 

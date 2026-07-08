@@ -1,13 +1,9 @@
 //! copy users, accounts, positions from redis to postgres
 
-use bytes::Bytes;
 use dotenvy::dotenv;
-use futures_util::SinkExt;
 use serde::de::DeserializeOwned;
-use std::env;
 use std::error::Error;
 use std::fmt::Write;
-use tokio_postgres::NoTls;
 use tracing::{debug, error, info, warn};
 
 #[tokio::main]
@@ -31,29 +27,17 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let pg_config = env::var("POSTGRES_CONFIG").map_err(|_| "POSTGRES_CONFIG must be set")?;
-    let redis_url = env::var("REDIS_URL").map_err(|_| "REDIS_URL must be set")?;
+    let pg_config = helpers::require_env("POSTGRES_CONFIG")?;
+    let redis_url = helpers::require_env("REDIS_URL")?;
 
-    let sync_interval: u64 = env::var("DELAY")
-        .map_err(|_| "DELAY must be set")?
+    let sync_interval: u64 = helpers::require_env("DELAY")?
         .parse()
         .map_err(|_| "DELAY must be an int")?;
 
     debug!("read env vars");
 
-    // Connect to postgres
-    let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            error!(?e, "postgres connection driver error");
-        }
-    });
-    debug!("connected to postgres");
-
-    // Connect to redis
-    let redis_client = redis::Client::open(redis_url)?;
-    let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
-    debug!("connected to redis");
+    let pg_client = helpers::connect_postgres(&pg_config).await?;
+    let mut redis_conn = helpers::connect_redis(redis_url).await?;
 
     loop {
         sync_users(&pg_client, &mut redis_conn).await?;
@@ -177,11 +161,7 @@ async fn sync_json_hash_table<T>(
 
     match pg_client.copy_in(&copy_query).await {
         Ok(sink) => {
-            tokio::pin!(sink);
-
-            let chunk = Bytes::from(copy_payload_buffer);
-            sink.send(chunk).await?;
-            sink.close().await?;
+            helpers::send_copy_payload(sink, &copy_payload_buffer).await?;
 
             info!("wrote {} into staging table", spec.entity_name);
 
@@ -211,7 +191,7 @@ async fn sync_json_hash_table<T>(
             );
         }
         Err(err) => {
-            error!(?err, "failed to initialize postgres COPY context");
+            error!(err = ?helpers::map_postgres_error(&err), "failed to initialize postgres COPY context");
         }
     }
 
