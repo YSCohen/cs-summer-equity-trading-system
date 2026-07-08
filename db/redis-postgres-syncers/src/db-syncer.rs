@@ -191,7 +191,7 @@ async fn sync_json_hash_table<T>(
             );
         }
         Err(err) => {
-            error!(?err, "failed to initialize postgres COPY context");
+            error!(err = ?helpers::map_postgres_error(&err), "failed to initialize postgres COPY context");
         }
     }
 

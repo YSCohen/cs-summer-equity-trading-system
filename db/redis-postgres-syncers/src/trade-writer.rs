@@ -302,7 +302,7 @@ async fn copy_direct(
 
     // Send the entire batch over the network in one chunk
     if let Err(e) = helpers::send_copy_payload(sink, copy_payload_buffer).await {
-        log_postgres_error("COPY failed. transaction aborted", &e);
+        error!(err = ?helpers::map_postgres_error(&e), "COPY failed. transaction aborted");
         return Err(());
     }
     Ok(())
@@ -323,13 +323,13 @@ async fn copy_via_staging(
     let tx = match pg_client.transaction().await {
         Ok(tx) => tx,
         Err(e) => {
-            log_postgres_error("Failed to open db transaction (for staging)", &e);
+            error!(err = ?helpers::map_postgres_error(&e), "Failed to open db transaction (for staging)");
             return Err(());
         }
     };
 
     if let Err(e) = tx.batch_execute(CREATE_STAGE_QUERY).await {
-        log_postgres_error("Failed to create staging table", &e);
+        error!(err = ?helpers::map_postgres_error(&e), "Failed to create staging table");
         return Err(());
     }
 
@@ -338,24 +338,24 @@ async fn copy_via_staging(
         let sink = match tx.copy_in(STAGE_COPY_QUERY).await {
             Ok(sink) => sink,
             Err(e) => {
-                log_postgres_error("Failed to initialize staging COPY context", &e);
+                error!(err = ?helpers::map_postgres_error(&e), "Failed to initialize staging COPY context");
                 return Err(());
             }
         };
 
         if let Err(e) = helpers::send_copy_payload(sink, copy_payload_buffer).await {
-            log_postgres_error("COPY into staging table failed", &e);
+            error!(err = ?helpers::map_postgres_error(&e), "COPY into staging table failed");
             return Err(());
         }
     }
 
     if let Err(e) = tx.batch_execute(UPSERT_QUERY).await {
-        log_postgres_error("Upsert from staging table failed", &e);
+        error!(err = ?helpers::map_postgres_error(&e), "Upsert from staging table failed");
         return Err(());
     }
 
     if let Err(e) = tx.commit().await {
-        log_postgres_error("Committing staging transaction failed", &e);
+        error!(err = ?helpers::map_postgres_error(&e), "Committing staging transaction failed");
         return Err(());
     }
 
@@ -429,14 +429,6 @@ struct TradePayload {
     quantity: i32,
     price: String,
     other_account: Option<String>,
-}
-
-fn log_postgres_error(context: &str, err: &tokio_postgres::Error) {
-    if let Some(db_error) = err.as_db_error() {
-        error!(?db_error, context);
-    } else {
-        error!(?err, context);
-    }
 }
 
 async fn ack_and_trim_stream(

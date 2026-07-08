@@ -36,6 +36,17 @@ pub async fn connect_postgres(config: &str) -> Result<Client, Box<dyn Error>> {
     Ok(client)
 }
 
+/// Map a postgres error to the most informative value to log.
+///
+/// A `DbError` carries the server-side detail (code, message, hint), so prefer
+/// it when present and fall back to the raw error otherwise.
+pub fn map_postgres_error(err: &tokio_postgres::Error) -> &dyn std::fmt::Debug {
+    match err.as_db_error() {
+        Some(db_error) => db_error,
+        None => err,
+    }
+}
+
 /// Send an entire COPY payload over a sink in one chunk and close it.
 pub async fn send_copy_payload(
     sink: CopyInSink<Bytes>,
