@@ -56,8 +56,6 @@ async fn main() {
         std::process::exit(1);
     }
 
-    info!("=== STARTING TRADE WRITER ===");
-
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
         error!(?err, "Fatal application initialization error");

@@ -5,7 +5,7 @@ use futures_util::SinkExt;
 use std::env;
 use std::error::Error;
 use tokio_postgres::{Client, CopyInSink, NoTls};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 use tracing_loki::url::Url;
 use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -93,9 +93,22 @@ pub fn init_tracing(app_name: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::spawn(loki_task);
 
-    debug!("connected to loki");
+    info!(build = %build_info(), "=== STARTING {app_name} ===");
 
     Ok(())
+}
+
+/// build metadata captured at compile time by `build.rs`
+pub fn build_info() -> String {
+    // env!() "Inspects an environment variable at compile time"
+    let hash = env!("BUILD_GIT_HASH");
+    let built = env!("BUILD_UNIX_SECS")
+        .parse::<i64>()
+        .ok()
+        .and_then(|secs| jiff::Timestamp::from_second(secs).ok())
+        .map(|ts| ts.strftime("%Y-%m-%d %H:%M:%S UTC").to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    format!("commit {hash}, built {built}")
 }
 
 pub async fn shutdown_signal() {
