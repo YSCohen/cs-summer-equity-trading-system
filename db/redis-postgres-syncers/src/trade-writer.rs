@@ -75,8 +75,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!("read env vars");
 
-    let mut pg_client = helpers::connect_postgres(&pg_config).await?;
-    let mut redis_conn = helpers::connect_redis(redis_url).await?;
+    let mut pg_client = helpers::connect_postgres(&pg_config).await;
+    let mut redis_conn = helpers::connect_redis(redis_url).await;
 
     // Create Redis Consumer Group dynamically
     let group_create_result: Result<(), redis::RedisError> = redis_conn

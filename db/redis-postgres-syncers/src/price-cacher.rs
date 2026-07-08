@@ -37,7 +37,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!("read env vars");
 
-    let mut redis_conn = helpers::connect_redis(redis_url).await?;
+    let mut redis_conn = helpers::connect_redis(redis_url).await;
 
     let symbols = fetch_sp500_symbols().await?;
 

@@ -14,26 +14,43 @@ pub fn require_env(name: &str) -> Result<String, Box<dyn Error>> {
     env::var(name).map_err(|_| format!("{name} must be set").into())
 }
 
-/// Open a multiplexed async redis connection.
-pub async fn connect_redis(
-    url: String,
-) -> Result<redis::aio::MultiplexedConnection, Box<dyn Error>> {
-    let client = redis::Client::open(url)?;
-    let conn = client.get_multiplexed_async_connection().await?;
-    debug!("connected to redis");
-    Ok(conn)
+/// Open a multiplexed async redis connection, or log the error and exit.
+pub async fn connect_redis(url: String) -> redis::aio::MultiplexedConnection {
+    let client = match redis::Client::open(url) {
+        Ok(client) => client,
+        Err(e) => {
+            error!(?e, "failed to open redis client");
+            std::process::exit(1);
+        }
+    };
+    match client.get_multiplexed_async_connection().await {
+        Ok(conn) => {
+            debug!("connected to redis");
+            conn
+        }
+        Err(e) => {
+            error!(?e, "failed to connect to redis");
+            std::process::exit(1);
+        }
+    }
 }
 
-/// Connect to postgres and spawn the connection driver in the background.
-pub async fn connect_postgres(config: &str) -> Result<Client, Box<dyn Error>> {
-    let (client, connection) = tokio_postgres::connect(config, NoTls).await?;
+/// Connect to postgres and spawn the connection driver, or log the error and exit.
+pub async fn connect_postgres(config: &str) -> Client {
+    let (client, connection) = match tokio_postgres::connect(config, NoTls).await {
+        Ok(pair) => pair,
+        Err(e) => {
+            error!(?e, "failed to connect to postgres");
+            std::process::exit(1);
+        }
+    };
     tokio::spawn(async move {
         if let Err(e) = connection.await {
             error!(?e, "postgres connection driver error");
         }
     });
     debug!("connected to postgres");
-    Ok(client)
+    client
 }
 
 /// Map a postgres error to the most informative value to log.
