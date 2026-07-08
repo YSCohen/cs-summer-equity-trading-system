@@ -56,11 +56,8 @@ async fn main() {
         std::process::exit(1);
     }
 
-    info!("=== STARTING TRADE WRITER ===");
-
-    // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
-        error!(?err, "Fatal application initialization error");
+        error!(?err, "Fatal error");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
@@ -75,8 +72,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!("read env vars");
 
-    let mut pg_client = helpers::connect_postgres(&pg_config).await?;
-    let mut redis_conn = helpers::connect_redis(redis_url).await?;
+    let mut pg_client = helpers::connect_postgres(&pg_config).await;
+    let mut redis_conn = helpers::connect_redis(redis_url).await;
 
     // Create Redis Consumer Group dynamically
     let group_create_result: Result<(), redis::RedisError> = redis_conn

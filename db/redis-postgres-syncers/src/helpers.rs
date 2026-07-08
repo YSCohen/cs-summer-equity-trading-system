@@ -5,7 +5,7 @@ use futures_util::SinkExt;
 use std::env;
 use std::error::Error;
 use tokio_postgres::{Client, CopyInSink, NoTls};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 use tracing_loki::url::Url;
 use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -14,26 +14,43 @@ pub fn require_env(name: &str) -> Result<String, Box<dyn Error>> {
     env::var(name).map_err(|_| format!("{name} must be set").into())
 }
 
-/// Open a multiplexed async redis connection.
-pub async fn connect_redis(
-    url: String,
-) -> Result<redis::aio::MultiplexedConnection, Box<dyn Error>> {
-    let client = redis::Client::open(url)?;
-    let conn = client.get_multiplexed_async_connection().await?;
-    debug!("connected to redis");
-    Ok(conn)
+/// Open a multiplexed async redis connection, or log the error and exit.
+pub async fn connect_redis(url: String) -> redis::aio::MultiplexedConnection {
+    let client = match redis::Client::open(url) {
+        Ok(client) => client,
+        Err(e) => {
+            error!(?e, "failed to open redis client");
+            std::process::exit(1);
+        }
+    };
+    match client.get_multiplexed_async_connection().await {
+        Ok(conn) => {
+            debug!("connected to redis");
+            conn
+        }
+        Err(e) => {
+            error!(?e, "failed to connect to redis");
+            std::process::exit(1);
+        }
+    }
 }
 
-/// Connect to postgres and spawn the connection driver in the background.
-pub async fn connect_postgres(config: &str) -> Result<Client, Box<dyn Error>> {
-    let (client, connection) = tokio_postgres::connect(config, NoTls).await?;
+/// Connect to postgres and spawn the connection driver, or log the error and exit.
+pub async fn connect_postgres(config: &str) -> Client {
+    let (client, connection) = match tokio_postgres::connect(config, NoTls).await {
+        Ok(pair) => pair,
+        Err(e) => {
+            error!(?e, "failed to connect to postgres");
+            std::process::exit(1);
+        }
+    };
     tokio::spawn(async move {
         if let Err(e) = connection.await {
             error!(?e, "postgres connection driver error");
         }
     });
     debug!("connected to postgres");
-    Ok(client)
+    client
 }
 
 /// Map a postgres error to the most informative value to log.
@@ -76,9 +93,23 @@ pub fn init_tracing(app_name: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::spawn(loki_task);
 
-    debug!("connected to loki");
+    info!(build = %build_info(), "=== STARTING {app_name} ===");
 
     Ok(())
+}
+
+/// build metadata captured at compile time by `build.rs`
+pub fn build_info() -> String {
+    // env!() "Inspects an environment variable at compile time"
+    let source = env!("BUILD_SOURCE");
+    let hash = env!("BUILD_GIT_HASH");
+    let built = env!("BUILD_UNIX_SECS")
+        .parse::<i64>()
+        .ok()
+        .and_then(|secs| jiff::Timestamp::from_second(secs).ok())
+        .map(|ts| ts.strftime("%Y-%m-%d %H:%M:%S UTC").to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    format!("built by {source}, from commit {hash}, on {built}")
 }
 
 pub async fn shutdown_signal() {

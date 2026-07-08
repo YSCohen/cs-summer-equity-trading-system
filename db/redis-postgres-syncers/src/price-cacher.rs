@@ -19,9 +19,6 @@ async fn main() {
         std::process::exit(1);
     }
 
-    info!("=== STARTING MARKET PRICE CACHER ===");
-
-    // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
         error!(?err, "Fatal error");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -37,7 +34,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!("read env vars");
 
-    let mut redis_conn = helpers::connect_redis(redis_url).await?;
+    let mut redis_conn = helpers::connect_redis(redis_url).await;
 
     let symbols = fetch_sp500_symbols().await?;
 
