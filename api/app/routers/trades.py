@@ -7,7 +7,12 @@ from app.services.trade_services import (
     individual_trade,
     verify_account_access,
     verify_ticker_exists,
+    verify_other_account,
+    verify_trade_details,
+    get_user_data,
+    get_account_data,
 )
+from app.services.position_services import edit_position
 
 router = APIRouter(tags=["Trades"])
 
@@ -121,4 +126,73 @@ async def get_user_trades(
     return {
         "trades": trades,
         "next_cursor": next_cursor,
+    }
+
+
+@router.get("/trade/{trade_id}")
+async def get_trade_by_id(
+    trade_id: str,
+    request: Request,
+    user_id: str = Depends(verify_cookie),
+):
+    logger.info(f"Received request for trade data with trade_id: {trade_id}")
+
+    query = """
+        SELECT *
+        FROM trades
+        WHERE trade_id = $1 AND user_id = $2
+    """
+
+    row = await request.app.state.pg_pool.fetchrow(query, trade_id, user_id)
+
+    if row is None:
+        logger.warning(f"Trade with trade_id {trade_id} not found for user {user_id}")
+        raise HTTPException(status_code=404, detail="Trade not found")
+
+    return dict(row)
+
+
+@router.patch("/edit_trade/{trade_id}")
+async def update_trade(
+    trade_id: str,
+    trade: Trade,
+    request: Request,
+    user_id: str = Depends(verify_cookie),
+):
+    logger.info(f"Received request to update trade with trade_id: {trade_id}")
+
+    # Check if the trade exists and belongs to the user
+    existing_trade = await request.app.state.pg_pool.fetchrow(
+        "SELECT * FROM trades WHERE trade_id = $1 AND user_id = $2",
+        trade_id,
+        user_id,
+    )
+
+    if existing_trade is None:
+        logger.warning(f"Trade with trade_id {trade_id} not found for user {user_id}")
+        raise HTTPException(status_code=404, detail="Trade not found")
+
+    user_data = await get_user_data(user_id)  # Fetch user data from Redis
+    await get_account_data(
+        trade.account_id
+    )  # Ensure this account_id exists in the database
+    existing_trade_dict = dict(existing_trade)
+
+    await verify_trade_details(trade.model_dump(), user_data)  # Validate trade details
+
+    trade.other_account = verify_other_account(
+        trade.other_account
+    )  # Validate other_account
+
+    await edit_position(
+        user_id, existing_trade_dict, trade.model_dump(), trade.other_account, trade_id
+    )  # Revert the position change from the existing trade and apply the position change from the updated trade
+
+    logger.info(
+        f"Trade with trade_id {trade_id} updated successfully for user {user_id}"
+    )
+
+    return {
+        "status": "accepted",
+        "trade_id": trade_id,
     }
