@@ -3,6 +3,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: error-page
+  annotations:
+    reloader.stakater.com/auto: "true"
   labels:
     app: error-page
 spec:
