@@ -242,14 +242,21 @@ setup_db_secrets() {
 }
 
 # Function to enable Tailscale Funnel
-setup_funnel() {
-    echo "🌐 Configuring Tailscale Funnel..."
-    read -p "Enter the port to expose (e.g., 8080): " PORT
+update_self() {
+    echo "⬇️ Pulling latest k3s_manager.sh from upstream..."
+    local REPO_URL="https://raw.githubusercontent.com/SM26-Industrial-Software-Dev/equity-trading-system/main/k3s_manager.sh"
+    local TMP_FILE=$(mktemp)
 
-    echo "Enabling funnel on port $PORT..."
-    sudo tailscale funnel "$PORT"
-
-    echo "✅ Funnel active. Your service is now reachable via your Tailscale node URL."
+    if curl -sSL "$REPO_URL" -o "$TMP_FILE"; then
+        mv "$TMP_FILE" "$0"
+        chmod +x "$0"
+        echo "✅ Successfully updated. Please re-run the script."
+        exit 0
+    else
+        echo "❌ Update failed. Network or repository issue."
+        rm "$TMP_FILE"
+        exit 1
+    fi
 }
 
 # Main Menu Loop
@@ -266,7 +273,7 @@ while true; do
     echo "5) Bootstrap FluxCD"
     echo "6) Uninstall K3s"
     echo "7) Setup Database Secrets"
-    echo "8) Enable Tailscale Funnel"
+    echo "8) Update Manager"
     echo "9) Exit"
     echo "======================================"
     read -p "Select an option [1-9]: " choice
@@ -279,7 +286,7 @@ while true; do
     5) bootstrap_flux ;;
     6) uninstall_k3s ;;
     7) setup_db_secrets ;;
-    8) setup_funnel ;;
+    8) update_self ;;
     9)
         echo "Goodbye!"
         exit 0
