@@ -5,6 +5,7 @@ def main [...rest] {
         build trade-writer
         build db-syncer
         build price-cacher
+        build price-history-timeseries
     } else {
         $rest | each {build $in} | ignore
     }

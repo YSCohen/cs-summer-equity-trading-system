@@ -21,6 +21,10 @@ path = "src/db-syncer.rs"
 name = "price-cacher"
 path = "src/price-cacher.rs"
 
+[[bin]]
+name = "price-history-timeseries"
+path = "src/price-history-timeseries.rs"
+
 
 [dependencies]
 bytes = "1.11"
