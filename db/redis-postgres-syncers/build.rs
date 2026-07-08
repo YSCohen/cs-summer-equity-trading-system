@@ -1,32 +1,20 @@
-//! expose build time and commit hash as env vars for helpers::build_info()
+//! Expose build metadata env vars (source, commit, time) as build-time env vars
+//! for `helpers::build_info()`.
 
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
-    let hash = run_git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".into());
-    let dirty = match run_git(&["status", "--porcelain"]) {
-        Some(s) if !s.is_empty() => "-dirty",
-        _ => "",
-    };
-    println!("cargo:rustc-env=BUILD_GIT_HASH={hash}{dirty}");
+    // builder and commit hash are just passed along from build env
+    let source = std::env::var("BUILD_SOURCE").unwrap_or("<mysterious builder>".to_string());
+    println!("cargo:rustc-env=BUILD_SOURCE={source}");
 
-    // UTC build time as unix seconds; formatted at log time to avoid jiff dep here
+    let hash = std::env::var("BUILD_GIT_HASH").unwrap_or("<unknown commit>".to_string());
+    println!("cargo:rustc-env=BUILD_GIT_HASH={hash}");
+
+    // UTC build time as unix seconds; formatted at log time to avoid a date dep here.
     let build_unix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
     println!("cargo:rustc-env=BUILD_UNIX_SECS={build_unix}");
-
-    // Rebuild when HEAD moves so the hash stays current.
-    println!("cargo:rerun-if-changed=.git/HEAD");
-    println!("cargo:rerun-if-changed=.git/index");
-}
-
-fn run_git(args: &[&str]) -> Option<String> {
-    let out = Command::new("git").args(args).output().ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }

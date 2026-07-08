@@ -101,6 +101,7 @@ pub fn init_tracing(app_name: &str) -> Result<(), Box<dyn std::error::Error>> {
 /// build metadata captured at compile time by `build.rs`
 pub fn build_info() -> String {
     // env!() "Inspects an environment variable at compile time"
+    let source = env!("BUILD_SOURCE");
     let hash = env!("BUILD_GIT_HASH");
     let built = env!("BUILD_UNIX_SECS")
         .parse::<i64>()
@@ -108,7 +109,7 @@ pub fn build_info() -> String {
         .and_then(|secs| jiff::Timestamp::from_second(secs).ok())
         .map(|ts| ts.strftime("%Y-%m-%d %H:%M:%S UTC").to_string())
         .unwrap_or_else(|| "unknown".to_string());
-    format!("commit {hash}, built {built}")
+    format!("built by {source}, from commit {hash}, on {built}")
 }
 
 pub async fn shutdown_signal() {

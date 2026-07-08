@@ -49,7 +49,10 @@ RUN cargo chef cook --release --target $RUST_TARGET --recipe-path recipe.json
 
 COPY . .
 ARG BIN_NAME
-RUN cargo build --release --target $RUST_TARGET --bin $BIN_NAME && \
+ARG BUILD_SOURCE
+ARG BUILD_GIT_HASH
+RUN BUILD_SOURCE="$BUILD_SOURCE" BUILD_GIT_HASH="$BUILD_GIT_HASH" \
+    cargo build --release --target $RUST_TARGET --bin $BIN_NAME && \
     cp target/$RUST_TARGET/release/$BIN_NAME /app-binary
 
 
