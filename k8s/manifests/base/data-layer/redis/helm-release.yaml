@@ -1,0 +1,64 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: redis
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: redis
+      version: "18.x.x" 
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+  values:
+    architecture: replication
+    auth:
+      enabled: false 
+    
+    commonConfiguration: |-
+      appendonly yes
+      appendfsync everysec
+      save 60 1
+      save 300 10
+      dir /data
+
+    image:
+      registry: docker.io
+      repository: bitnami/redis
+      tag: "latest"
+
+    sentinel:
+      enabled: true
+      masterSet: mymaster
+      quorum: 2
+      image:
+        registry: docker.io
+        repository: bitnami/redis-sentinel
+        tag: "latest"
+
+    master:
+      persistence:
+        enabled: true
+        size: 2Gi
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 250m
+          memory: 256Mi
+
+    replica:
+      replicaCount: 3
+      persistence:
+        enabled: true
+        size: 2Gi
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 250m
+          memory: 256Mi

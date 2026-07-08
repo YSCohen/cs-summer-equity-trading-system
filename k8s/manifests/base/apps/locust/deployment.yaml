@@ -19,6 +19,13 @@ spec:
           command: ["locust", "-f", "/mnt/locust/locustfile.py", "--host", "http://fastapi-service.backend.svc.cluster.local:80"]
           ports:
             - containerPort: 8089
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "100Mi"
+            limits:
+              cpu: "750m"
+              memory: "256Mi"
           volumeMounts:
             - name: locust-script-volume
               # Mount the specific file from the config map

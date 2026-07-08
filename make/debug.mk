@@ -2,17 +2,10 @@
 # 🕵️ DOWNWARD API & ENV DEBUGGING
 # ==========================================
 
-debug-api-manifest: ## 1. Check if the cluster actually received your new YAML
-	@echo "🔍 Inspecting the Deployment manifest directly on the cluster..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl get deployment fastapi-api -n backend -o yaml | grep -A 15 "env:"
-
-debug-api-env: ## 2. Check the live environment variables inside the running Pod
-	@echo "🔍 Executing 'env' inside the active FastAPI pod..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl exec deployment/fastapi-api -n backend -- env | grep -E "NODE|POD|Worker|GIT|ENV"
-
 bounce-api: ## 3. Force a graceful restart of the FastAPI pods to pick up new Env Vars
 	@echo "🔄 Forcing a rolling restart of the FastAPI deployment..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/fastapi-api -n backend
+
 # ==========================================
 # 🔍 INTERACTIVE SHELLS & DATABASES
 # ==========================================
@@ -42,15 +35,10 @@ psql: ## 🐘 Starting interactive PostgreSQL session...
 	@echo "🐘 Starting interactive PostgreSQL session..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it statefulset/postgres -n data -- psql -U trade_admin -d trading
 
-redis-cli: ## 🔴 Connecting to Redis CLI...
-	@echo "🔴 Connecting to Redis CLI..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it redis-0 -n data -- redis-cli
+redis-cli: ## 🔴 Connecting to Redis CLI dynamically...
+	@echo "🔴 Finding active Redis node and launching CLI..."
+	@$(DOCKER) exec -it k8s-toolbox bash -c 'POD=$$(kubectl get pods -n data -l "app.kubernetes.io/name=redis" -o jsonpath="{.items[0].metadata.name}" 2>/dev/null || kubectl get pods -n data -l "app=redis" -o jsonpath="{.items[0].metadata.name}"); kubectl exec -it $$POD -n data -- redis-cli'
 
-seed-all: ## 🌱 Spawning temporary pod to inject all test data (trades, users, accounts, positions)...
-	@echo "🌱 Injecting full test data suite..."
-	@cd db/redis-postgres-syncers/test && \
-	tar cf - . | $(DOCKER) exec -i k8s-toolbox kubectl run data-seeder --rm -i -n backend \
-		--image=ghcr.io/astral-sh/uv:alpine \
-		--env="REDIS_HOST=redis.data.svc.cluster.local" \
-		--restart=Never \
-		-- sh -c "mkdir /app && cd /app && tar xf - && uv run test_all.py"
+redis-sentinel: ## 🛡️ Connecting to Redis Sentinel CLI...
+	@echo "🛡️ Connecting to Sentinel to check quorum..."
+	@$(DOCKER) exec -it k8s-toolbox bash -c 'POD=$$(kubectl get pods -n data -l "app.kubernetes.io/name=redis,app.kubernetes.io/component=sentinel" -o jsonpath="{.items[0].metadata.name}"); kubectl exec -it $$POD -n data -- redis-cli -p 26379 info sentinel'

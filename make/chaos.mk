@@ -81,6 +81,9 @@ chaos: ## 💥 Interactive menu to scale components down to 0
 						echo "🔫 Scaling $$data_app down to 0 in namespace data..."; \
 						if [ "$$data_app" = "pgbouncer" ]; then \
 							$(DOCKER) exec -it k8s-toolbox kubectl scale deployment $$data_app -n data --replicas=0; \
+						elif [ "$$data_app" = "redis" ]; then \
+							REDIS_STS=$$($(DOCKER) exec -it k8s-toolbox kubectl get sts -n data -l 'app.kubernetes.io/name=redis' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "redis"); \
+							$(DOCKER) exec -it k8s-toolbox kubectl scale statefulset $$REDIS_STS -n data --replicas=0; \
 						else \
 							$(DOCKER) exec -it k8s-toolbox kubectl scale statefulset $$data_app -n data --replicas=0; \
 						fi; \
@@ -107,6 +110,8 @@ restore-all: ## 🚑 Resume Flux to naturally restore all chaos components
 	@$(DOCKER) exec -it k8s-toolbox flux resume kustomization 3-apps 2>/dev/null || true
 	@echo "🔄 Forcing a Flux sync to immediately recover replica counts..."
 	@$(MAKE) --no-print-directory sync LAYER=all
+	@echo "📦 Forcing HelmRelease reconciliations (to restore Redis/StatefulSets)..."
+	@$(DOCKER) exec -it k8s-toolbox flux reconcile helmrelease -n data --all 2>/dev/null || true
 
 chaos-node-stop: ## 🔥 Stopping the primary K3s node (Simulating Server Crash)
 	@echo "🔥 Stopping the primary K3s node (Simulating Server Crash)..."

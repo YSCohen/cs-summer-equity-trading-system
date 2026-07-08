@@ -21,7 +21,8 @@ spec:
             - -c
             - |
               echo "Waiting for Loki to become reachable..."
-              until nc -z loki-stack.monitoring.svc.cluster.local 3100; do
+              until nc -z loki-stack.monitoring.svc.cluster.local 3100 && \
+                    nc -z redis-proxy.data.svc.cluster.local 6379; do
                 echo "Loki not ready. Sleeping 2 seconds..."
                 sleep 2
               done
@@ -30,6 +31,13 @@ spec:
         - name: price-cacher
           image: price-cacher-image
           imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "64Mi"
+            limits:
+              cpu: "75m"
+              memory: "256Mi"
           env:
             - name: REDIS_URL
               valueFrom:

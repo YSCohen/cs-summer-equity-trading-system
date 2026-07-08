@@ -25,6 +25,13 @@ spec:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
             runAsUser: 101
+          resources:
+            requests:
+              cpu: "6m"
+              memory: "20Mi"
+            limits:
+              cpu: "25m"
+              memory: "50Mi"
           volumeMounts:
             - name: config-volume
               mountPath: /usr/share/nginx/html/index.html

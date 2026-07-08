@@ -2,6 +2,12 @@
 # 📊 CLUSTER STATUS
 # ==========================================
 
+ks: check-sync      ## Super short alias for flux get kustomizations
+
+events: ## ⚠️  Show recent cluster events sorted by time
+	@echo "⚠️  RECENT CLUSTER EVENTS:"
+	@$(DOCKER) exec -it k8s-toolbox bash -c 'kubectl get events --sort-by=".metadata.creationTimestamp" -A | tail -n 30'
+
 status: ## 🟢 CURRENT POD STATUS:
 	@echo "🟢 CURRENT POD STATUS:"
 	@$(DOCKER) exec -it k8s-toolbox kubectl get pods -A

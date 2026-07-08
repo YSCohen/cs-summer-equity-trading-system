@@ -22,7 +22,7 @@ spec:
             - |
               echo "Waiting for Redis, PgBouncer, and Loki..."
               # Loop until ALL three services respond to a TCP ping
-              until nc -z redis.data.svc.cluster.local 6379 && \
+              until nc -z redis-proxy.data.svc.cluster.local 6379 && \
                     nc -z pgbouncer.data.svc.cluster.local 6432 && \
                     nc -z loki-stack.monitoring.svc.cluster.local 3100; do
                 echo "Infrastructure not ready. Sleeping 1 second..."
@@ -33,6 +33,13 @@ spec:
         - name: trade-writer
           image: trade-writer-image
           imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "64Mi"
+            limits:
+              cpu: "750m"
+              memory: "128Mi"
           env:
             - name: POSTGRES_USER
               valueFrom:
