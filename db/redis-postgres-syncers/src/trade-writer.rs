@@ -1,17 +1,14 @@
 //! Write trades from redis stream (sent by API) to postgres
 
 use dotenvy::dotenv;
-use futures_util::SinkExt;
 use redis::AsyncCommands;
 use redis::streams::{
     StreamAutoClaimOptions, StreamAutoClaimReply, StreamDeletionPolicy, StreamId,
     StreamReadOptions, StreamReadReply, StreamTrimOptions, StreamTrimmingMode,
 };
 use serde::Deserialize;
-use std::env;
 use std::fmt::Write;
 use tokio::time::{Duration, Instant};
-use tokio_postgres::NoTls;
 use tracing::{debug, error, info, warn};
 
 // ADJUSTABLE
@@ -70,28 +67,16 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let pg_config = env::var("POSTGRES_CONFIG").map_err(|_| "POSTGRES_CONFIG must be set")?;
-    let redis_url = env::var("REDIS_URL").map_err(|_| "REDIS_URL must be set")?;
-    let stream_name = env::var("REDIS_STREAM_NAME").map_err(|_| "REDIS_STREAM_NAME must be set")?;
-    let consumer_group =
-        env::var("REDIS_CONSUMER_GROUP").map_err(|_| "REDIS_CONSUMER_GROUP must be set")?;
-    let worker_name = env::var("WORKER_NAME").map_err(|_| "WORKER_NAME must be set")?;
+    let pg_config = helpers::require_env("POSTGRES_CONFIG")?;
+    let redis_url = helpers::require_env("REDIS_URL")?;
+    let stream_name = helpers::require_env("REDIS_STREAM_NAME")?;
+    let consumer_group = helpers::require_env("REDIS_CONSUMER_GROUP")?;
+    let worker_name = helpers::require_env("WORKER_NAME")?;
 
     debug!("read env vars");
 
-    // Connect to postgres
-    let (mut pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            error!(?e, "PostgreSQL connection driver error");
-        }
-    });
-    debug!("connected to postgres");
-
-    // Connect to redis
-    let redis_client = redis::Client::open(redis_url)?;
-    let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
-    debug!("connected to redis");
+    let mut pg_client = helpers::connect_postgres(&pg_config).await?;
+    let mut redis_conn = helpers::connect_redis(redis_url).await?;
 
     // Create Redis Consumer Group dynamically
     let group_create_result: Result<(), redis::RedisError> = redis_conn
@@ -314,16 +299,10 @@ async fn copy_direct(
             return Err(());
         }
     };
-    tokio::pin!(sink);
 
     // Send the entire batch over the network in one chunk
-    let chunk = bytes::Bytes::from(copy_payload_buffer.to_owned());
-    if let Err(e) = sink.send(chunk).await {
-        log_postgres_error("Streaming COPY failed. transaction aborted", &e);
-        return Err(());
-    }
-    if let Err(e) = sink.close().await {
-        log_postgres_error("Finalizing COPY failed. transaction aborted", &e);
+    if let Err(e) = helpers::send_copy_payload(sink, copy_payload_buffer).await {
+        log_postgres_error("COPY failed. transaction aborted", &e);
         return Err(());
     }
     Ok(())
@@ -363,15 +342,9 @@ async fn copy_via_staging(
                 return Err(());
             }
         };
-        tokio::pin!(sink);
 
-        let chunk = bytes::Bytes::from(copy_payload_buffer.to_owned());
-        if let Err(e) = sink.send(chunk).await {
-            log_postgres_error("Streaming COPY into staging table failed", &e);
-            return Err(());
-        }
-        if let Err(e) = sink.close().await {
-            log_postgres_error("Finalizing COPY into staging table failed", &e);
+        if let Err(e) = helpers::send_copy_payload(sink, copy_payload_buffer).await {
+            log_postgres_error("COPY into staging table failed", &e);
             return Err(());
         }
     }

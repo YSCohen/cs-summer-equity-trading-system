@@ -1,9 +1,51 @@
 //! common functions for these bins
 
+use bytes::Bytes;
+use futures_util::SinkExt;
 use std::env;
-use tracing::debug;
+use std::error::Error;
+use tokio_postgres::{Client, CopyInSink, NoTls};
+use tracing::{debug, error};
 use tracing_loki::url::Url;
 use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
+
+/// Read a required environment variable, or return a descriptive error.
+pub fn require_env(name: &str) -> Result<String, Box<dyn Error>> {
+    env::var(name).map_err(|_| format!("{name} must be set").into())
+}
+
+/// Open a multiplexed async redis connection.
+pub async fn connect_redis(
+    url: String,
+) -> Result<redis::aio::MultiplexedConnection, Box<dyn Error>> {
+    let client = redis::Client::open(url)?;
+    let conn = client.get_multiplexed_async_connection().await?;
+    debug!("connected to redis");
+    Ok(conn)
+}
+
+/// Connect to postgres and spawn the connection driver in the background.
+pub async fn connect_postgres(config: &str) -> Result<Client, Box<dyn Error>> {
+    let (client, connection) = tokio_postgres::connect(config, NoTls).await?;
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            error!(?e, "postgres connection driver error");
+        }
+    });
+    debug!("connected to postgres");
+    Ok(client)
+}
+
+/// Send an entire COPY payload over a sink in one chunk and close it.
+pub async fn send_copy_payload(
+    sink: CopyInSink<Bytes>,
+    payload: &str,
+) -> Result<(), tokio_postgres::Error> {
+    tokio::pin!(sink);
+    sink.send(Bytes::from(payload.to_owned())).await?;
+    sink.close().await?;
+    Ok(())
+}
 
 pub fn init_tracing(app_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let loki_url = env::var("LOKI_URL").map_err(|_| "LOKI_URL must be set")?;
