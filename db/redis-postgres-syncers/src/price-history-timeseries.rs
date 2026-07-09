@@ -12,9 +12,9 @@
 //! The API can read a window at the appropriate resolution with TS.RANGE, e.g.
 //! `TS.RANGE price:AAPL:1d - +` for the last month of daily closes.
 
+use anyhow::{Context, Result};
 use dotenvy::dotenv;
 use redis::aio::MultiplexedConnection;
-use std::error::Error;
 use tracing::{debug, info, trace, warn};
 use yahoo_finance_api as yahoo;
 
@@ -65,11 +65,11 @@ async fn main() {
     }
 }
 
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
+async fn run() -> Result<()> {
     let redis_url = helpers::require_env("REDIS_URL")?;
     let interval: u64 = helpers::require_env("DELAY")?
         .parse()
-        .map_err(|_| "DELAY must be an int")?;
+        .context("DELAY must be an int")?;
 
     debug!(interval, "read env vars");
 
@@ -125,17 +125,14 @@ fn raw_key(symbol: &str) -> String {
 ///
 /// Skips symbols whose raw series already exists so restarts stay cheap, and
 /// tolerates "already exists" errors in case provisioning was interrupted.
-async fn ensure_series(
-    redis_conn: &mut MultiplexedConnection,
-    symbol: &str,
-) -> Result<(), Box<dyn Error>> {
+async fn ensure_series(redis_conn: &mut MultiplexedConnection, symbol: &str) -> Result<()> {
     let raw = raw_key(symbol);
 
     let exists: bool = redis::cmd("EXISTS")
         .arg(&raw)
         .query_async(redis_conn)
         .await
-        .map_err(|e| format!("EXISTS check for {raw} failed: {e:?}"))?;
+        .with_context(|| format!("EXISTS check for {raw} failed"))?;
     if exists {
         trace!(symbol, "raw series already provisioned, skipping");
         return Ok(());
@@ -161,7 +158,7 @@ async fn create_series(
     retention_ms: i64,
     symbol: &str,
     tier: &str,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut cmd = redis::cmd("TS.CREATE");
     cmd.arg(key)
         .arg("RETENTION")
@@ -182,7 +179,7 @@ async fn create_rule(
     source: &str,
     dest: &str,
     bucket_ms: i64,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     // "last" downsamples each bucket to its closing price, matching how a
     // coarser candlestick's close is defined.
     let mut cmd = redis::cmd("TS.CREATERULE");
@@ -207,7 +204,7 @@ async fn run_ignoring_exists(
     redis_conn: &mut MultiplexedConnection,
     cmd: &redis::Cmd,
     label: &str,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     match cmd.query_async::<()>(redis_conn).await {
         Ok(()) => {
             trace!("{label} ok");
@@ -219,7 +216,7 @@ async fn run_ignoring_exists(
                 trace!("{label} already provisioned, ignoring");
                 Ok(())
             } else {
-                Err(format!("{label} failed: {e:?}").into())
+                Err(anyhow::Error::new(e).context(format!("{label} failed")))
             }
         }
     }
@@ -230,7 +227,7 @@ async fn run_ignoring_exists(
 async fn append_all_latest_samples(
     redis_conn: &mut MultiplexedConnection,
     symbols: &[String],
-) -> Result<usize, Box<dyn Error>> {
+) -> Result<usize> {
     let mut pipe = redis::pipe();
     let mut queued = 0;
     let mut skipped = 0;
@@ -267,7 +264,7 @@ async fn append_all_latest_samples(
     debug!("appending {queued} samples to redis in one pipeline");
     pipe.query_async::<()>(redis_conn)
         .await
-        .map_err(|e| format!("redis pipeline TS.ADD of {queued} samples failed: {e:?}"))?;
+        .with_context(|| format!("redis pipeline TS.ADD of {queued} samples failed"))?;
     debug!("redis pipeline executed");
 
     Ok(queued)
@@ -276,23 +273,22 @@ async fn append_all_latest_samples(
 /// Latest `(timestamp_ms, price)` for a symbol from yahoo's 1-minute intraday
 /// feed. Walks back from the most recent bar to skip trailing empty candles,
 /// whose close yahoo reports as NaN.
-async fn get_latest_sample(symbol: &str) -> Result<(i64, f64), Box<dyn Error>> {
-    let provider = yahoo::YahooConnector::new()
-        .map_err(|e| format!("could not construct yahoo client: {e:?}"))?;
+async fn get_latest_sample(symbol: &str) -> Result<(i64, f64)> {
+    let provider = yahoo::YahooConnector::new().context("could not construct yahoo client")?;
 
     let response = provider
         .get_quote_range(symbol, "1m", "1d")
         .await
-        .map_err(|e| format!("yahoo quote request failed: {e:?}"))?;
+        .context("yahoo quote request failed")?;
     let quotes = response
         .quotes()
-        .map_err(|e| format!("yahoo response had no usable quotes: {e:?}"))?;
+        .context("yahoo response had no usable quotes")?;
 
     let quote = quotes
         .iter()
         .rev()
         .find(|quote| quote.close.is_finite())
-        .ok_or("no finite price data found")?;
+        .context("no finite price data found")?;
 
     // yahoo reports seconds; RedisTimeSeries works in milliseconds
     let timestamp_ms = (quote.timestamp as i64) * 1000;

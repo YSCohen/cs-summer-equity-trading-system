@@ -1,5 +1,6 @@
 //! Write trades from redis stream (sent by API) to postgres
 
+use anyhow::{Context, Result};
 use dotenvy::dotenv;
 use redis::AsyncCommands;
 use redis::streams::{
@@ -61,7 +62,7 @@ async fn main() {
     }
 }
 
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
+async fn run() -> Result<()> {
     let pg_config = helpers::require_env("POSTGRES_CONFIG")?;
     let redis_url = helpers::require_env("REDIS_URL")?;
     let stream_name = helpers::require_env("REDIS_STREAM_NAME")?;
@@ -266,41 +267,46 @@ async fn process_batch(
     };
 
     // xack and trim messages in redis ONLY after postgres confirms the write.
-    if write_result.is_ok() {
-        info!("Successfully copied {} rows", msg_ids.len());
+    match write_result {
+        Ok(()) => {
+            info!("Successfully copied {} rows", msg_ids.len());
 
-        match ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await {
-            Ok(()) => debug!("ACK+trimmed {} messages from redis stream", msg_ids.len()),
-            Err(e) => error!(
-                ?e,
-                "Failed to ACK+trim {} messages from redis stream",
-                msg_ids.len()
-            ),
+            match ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await {
+                Ok(()) => debug!("ACK+trimmed {} messages from redis stream", msg_ids.len()),
+                Err(e) => error!(
+                    ?e,
+                    "Failed to ACK+trim {} messages from redis stream",
+                    msg_ids.len()
+                ),
+            }
         }
+        Err(e) => error!(
+            ?e,
+            "postgres write failed; leaving messages un-ACKed for retry"
+        ),
     }
 }
 
 /// COPY the payload buffer straight into `trades` table.
 ///
 /// Used for fresh messages, which are not expected to collide. Returns `Err`
-/// (probably already logged) on failure so the caller knows not to ACK.
+/// on failure so the caller knows not to ACK.
 async fn copy_direct(
     pg_client: &tokio_postgres::Client,
     copy_payload_buffer: &str,
-) -> Result<(), ()> {
-    let sink = match pg_client.copy_in(DIRECT_COPY_QUERY).await {
-        Ok(sink) => sink,
-        Err(e) => {
-            error!(?e, "Failed to initialize postgres COPY sink");
-            return Err(());
-        }
-    };
+) -> Result<()> {
+    let sink = pg_client
+        .copy_in(DIRECT_COPY_QUERY)
+        .await
+        .map_err(helpers::pg_error)
+        .context("Failed to initialize postgres COPY sink")?;
 
     // Send the entire batch over the network in one chunk
-    if let Err(e) = helpers::send_copy_payload(sink, copy_payload_buffer).await {
-        error!(err = ?helpers::map_postgres_error(&e), "COPY failed. transaction aborted");
-        return Err(());
-    }
+    helpers::send_copy_payload(sink, copy_payload_buffer)
+        .await
+        .map_err(helpers::pg_error)
+        .context("COPY failed, transaction aborted")?;
+
     Ok(())
 }
 
@@ -314,46 +320,42 @@ async fn copy_direct(
 async fn copy_via_staging(
     pg_client: &mut tokio_postgres::Client,
     copy_payload_buffer: &str,
-) -> Result<(), ()> {
+) -> Result<()> {
     // use single `Transaction` for the whole thing
-    let tx = match pg_client.transaction().await {
-        Ok(tx) => tx,
-        Err(e) => {
-            error!(err = ?helpers::map_postgres_error(&e), "Failed to open db transaction (for staging)");
-            return Err(());
-        }
-    };
+    let tx = pg_client
+        .transaction()
+        .await
+        .map_err(helpers::pg_error)
+        .context("Failed to open db transaction (for staging)")?;
 
-    if let Err(e) = tx.batch_execute(CREATE_STAGE_QUERY).await {
-        error!(err = ?helpers::map_postgres_error(&e), "Failed to create staging table");
-        return Err(());
-    }
+    tx.batch_execute(CREATE_STAGE_QUERY)
+        .await
+        .map_err(helpers::pg_error)
+        .context("Failed to create staging table")?;
 
     // Scope the sink so it is dropped before we run the upsert on `tx`.
     {
-        let sink = match tx.copy_in(STAGE_COPY_QUERY).await {
-            Ok(sink) => sink,
-            Err(e) => {
-                error!(err = ?helpers::map_postgres_error(&e), "Failed to initialize staging COPY context");
-                return Err(());
-            }
-        };
+        let sink = tx
+            .copy_in(STAGE_COPY_QUERY)
+            .await
+            .map_err(helpers::pg_error)
+            .context("Failed to initialize staging COPY context")?;
 
-        if let Err(e) = helpers::send_copy_payload(sink, copy_payload_buffer).await {
-            error!(err = ?helpers::map_postgres_error(&e), "COPY into staging table failed");
-            return Err(());
-        }
+        helpers::send_copy_payload(sink, copy_payload_buffer)
+            .await
+            .map_err(helpers::pg_error)
+            .context("COPY into staging table failed")?;
     }
 
-    if let Err(e) = tx.batch_execute(UPSERT_QUERY).await {
-        error!(err = ?helpers::map_postgres_error(&e), "Upsert from staging table failed");
-        return Err(());
-    }
+    tx.batch_execute(UPSERT_QUERY)
+        .await
+        .map_err(helpers::pg_error)
+        .context("Upsert from staging table failed")?;
 
-    if let Err(e) = tx.commit().await {
-        error!(err = ?helpers::map_postgres_error(&e), "Committing staging transaction failed");
-        return Err(());
-    }
+    tx.commit()
+        .await
+        .map_err(helpers::pg_error)
+        .context("Committing staging transaction failed")?;
 
     Ok(())
 }

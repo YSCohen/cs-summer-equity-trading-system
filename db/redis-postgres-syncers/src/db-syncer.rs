@@ -1,8 +1,8 @@
 //! copy users, accounts, positions from redis to postgres
 
+use anyhow::{Context, Result};
 use dotenvy::dotenv;
 use serde::de::DeserializeOwned;
-use std::error::Error;
 use std::fmt::Write;
 use tracing::{debug, info, trace, warn};
 
@@ -21,13 +21,13 @@ async fn main() {
     }
 }
 
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
+async fn run() -> Result<()> {
     let pg_config = helpers::require_env("POSTGRES_CONFIG")?;
     let redis_url = helpers::require_env("REDIS_URL")?;
 
     let sync_interval: u64 = helpers::require_env("DELAY")?
         .parse()
-        .map_err(|_| "DELAY must be an int")?;
+        .context("DELAY must be an int")?;
 
     debug!(sync_interval, "read env vars");
 
@@ -66,21 +66,13 @@ struct JsonHashTableSyncSpec<T> {
     copy_columns: &'static str,
     conflict_column: &'static str,
     update_assignments: &'static str,
-    parse_row: fn(&str, &str) -> Result<T, String>,
+    parse_row: fn(&str, &str) -> Result<T>,
     format_row: fn(&str, &T) -> String,
 }
 
-fn parse_json_row<T: DeserializeOwned>(
-    entity_name: &str,
-    id: &str,
-    json_str: &str,
-) -> Result<T, String> {
-    serde_json::from_str(json_str).map_err(|err| {
-        format!(
-            "Skipping: Failed to parse JSON for {entity_name} {id}: {:?}",
-            err
-        )
-    })
+fn parse_json_row<T: DeserializeOwned>(entity_name: &str, id: &str, json_str: &str) -> Result<T> {
+    serde_json::from_str(json_str)
+        .with_context(|| format!("Failed to parse JSON for {entity_name} {id}"))
 }
 
 fn build_upsert_sql(
@@ -103,16 +95,16 @@ async fn sync_json_hash_table<T>(
     pg_client: &tokio_postgres::Client,
     redis_conn: &mut redis::aio::MultiplexedConnection,
     spec: JsonHashTableSyncSpec<T>,
-) -> Result<(), Box<dyn Error + 'static>> {
+) -> Result<()> {
     debug!("sync {}...", spec.entity_name);
 
     let rows: std::collections::HashMap<String, String> = redis::cmd("HGETALL")
         .arg(spec.redis_key)
         .query_async(redis_conn)
         .await
-        .map_err(|e| {
+        .with_context(|| {
             format!(
-                "HGETALL of redis key \"{}\" for {} failed: {e:?}",
+                "HGETALL of redis key \"{}\" for {} failed",
                 spec.redis_key, spec.entity_name
             )
         })?;
@@ -130,11 +122,11 @@ async fn sync_json_hash_table<T>(
     pg_client
         .execute(&format!("TRUNCATE TABLE {};", spec.staging_table_name), &[])
         .await
-        .map_err(|e| {
+        .map_err(helpers::pg_error)
+        .with_context(|| {
             format!(
-                "TRUNCATE of staging table {} failed: {:?}",
-                spec.staging_table_name,
-                helpers::map_postgres_error(&e)
+                "TRUNCATE of staging table {} failed",
+                spec.staging_table_name
             )
         })?;
 
@@ -181,23 +173,21 @@ async fn sync_json_hash_table<T>(
         spec.staging_table_name, spec.copy_columns
     );
 
-    let sink = pg_client.copy_in(&copy_query).await.map_err(|e| {
-        format!(
-            "failed to initialize COPY into staging table {}: {:?}",
-            spec.staging_table_name,
-            helpers::map_postgres_error(&e)
-        )
-    })?;
+    let sink = pg_client
+        .copy_in(&copy_query)
+        .await
+        .map_err(helpers::pg_error)
+        .with_context(|| {
+            format!(
+                "failed to initialize COPY into staging table {}",
+                spec.staging_table_name
+            )
+        })?;
 
     helpers::send_copy_payload(sink, &copy_payload_buffer)
         .await
-        .map_err(|e| {
-            format!(
-                "COPY into staging table {} failed: {:?}",
-                spec.staging_table_name,
-                helpers::map_postgres_error(&e)
-            )
-        })?;
+        .map_err(helpers::pg_error)
+        .with_context(|| format!("COPY into staging table {} failed", spec.staging_table_name))?;
 
     info!("wrote {} into staging table", spec.entity_name);
 
@@ -213,12 +203,11 @@ async fn sync_json_hash_table<T>(
             &[],
         )
         .await
-        .map_err(|e| {
+        .map_err(helpers::pg_error)
+        .with_context(|| {
             format!(
-                "upsert from {} into {} failed: {:?}",
-                spec.staging_table_name,
-                spec.target_table_name,
-                helpers::map_postgres_error(&e)
+                "upsert from {} into {} failed",
+                spec.staging_table_name, spec.target_table_name
             )
         })?;
 
@@ -249,7 +238,7 @@ struct User {
 async fn sync_users(
     pg_client: &tokio_postgres::Client,
     redis_conn: &mut redis::aio::MultiplexedConnection,
-) -> Result<(), Box<dyn Error + 'static>> {
+) -> Result<()> {
     sync_json_hash_table(
         pg_client,
         redis_conn,
@@ -290,7 +279,7 @@ struct Account {
 async fn sync_accounts(
     pg_client: &tokio_postgres::Client,
     redis_conn: &mut redis::aio::MultiplexedConnection,
-) -> Result<(), Box<dyn Error + 'static>> {
+) -> Result<()> {
     sync_json_hash_table(
         pg_client,
         redis_conn,
@@ -331,7 +320,7 @@ struct Position {
 async fn sync_positions(
     pg_client: &tokio_postgres::Client,
     redis_conn: &mut redis::aio::MultiplexedConnection,
-) -> Result<(), Box<dyn Error + 'static>> {
+) -> Result<()> {
     sync_json_hash_table(
         pg_client,
         redis_conn,

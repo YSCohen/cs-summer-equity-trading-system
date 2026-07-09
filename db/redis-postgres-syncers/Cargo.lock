@@ -1555,6 +1555,7 @@ dependencies = [
 name = "redis-postgres-syncers"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bytes",
  "csv",
  "dotenvy",

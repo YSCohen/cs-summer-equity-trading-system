@@ -1,11 +1,11 @@
 //! pull market prices of S&P 500 from yahoo finance API
 //! and cache them in redis for fast access by the API
 
+use anyhow::{Context, Result};
 use dotenvy::dotenv;
 use jiff::Timestamp;
 use redis::aio::MultiplexedConnection;
 use serde::Serialize;
-use std::error::Error;
 use tracing::{debug, info, trace, warn};
 use yahoo_finance_api::{self as yahoo, YahooConnector};
 
@@ -24,11 +24,11 @@ async fn main() {
     }
 }
 
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
+async fn run() -> Result<()> {
     let redis_url = helpers::require_env("REDIS_URL")?;
     let interval: u64 = helpers::require_env("DELAY")?
         .parse()
-        .map_err(|_| "DELAY must be an int")?;
+        .context("DELAY must be an int")?;
 
     debug!(interval, "read env vars");
 
@@ -68,7 +68,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 async fn update_all_cached_prices(
     redis_conn: &mut MultiplexedConnection,
     symbols: &[String],
-) -> Result<usize, Box<dyn Error>> {
+) -> Result<usize> {
     let mut pipe = redis::pipe();
     let mut queued = 0;
     let mut skipped = 0;
@@ -117,31 +117,31 @@ struct MarketData {
     latest_time: String,
 }
 
-async fn get_quote_json(symbol: &str, provider: &YahooConnector) -> Result<String, Box<dyn Error>> {
+async fn get_quote_json(symbol: &str, provider: &YahooConnector) -> Result<String> {
     // 1-minute intervals for the current day
     let response = provider
         .get_quote_range(symbol, "1m", "1d")
         .await
-        .map_err(|e| format!("yahoo quote request failed: {e:?}"))?;
+        .context("yahoo quote request failed")?;
 
     let quotes = response
         .quotes()
-        .map_err(|e| format!("yahoo response had no usable quotes: {e:?}"))?;
+        .context("yahoo response had no usable quotes")?;
 
     // first bar in day is open, last is latest available
-    let first_quote = quotes.first().ok_or("no opening price data found")?;
-    let last_quote = quotes.last().ok_or("no current price data found")?;
+    let first_quote = quotes.first().context("no opening price data found")?;
+    let last_quote = quotes.last().context("no current price data found")?;
 
     let data = MarketData {
         open_price: first_quote.open,
         latest_price: last_quote.close,
         // ts will be string formatted in ISO 8601 - YYYY-MM-DDTHH:MM:SSZ
         latest_time: Timestamp::from_second(last_quote.timestamp as i64)
-            .map_err(|e| format!("invalid latest timestamp {}: {e:?}", last_quote.timestamp))?
+            .with_context(|| format!("invalid latest timestamp {}", last_quote.timestamp))?
             .to_string(),
     };
 
     trace!(symbol, latest = data.latest_price, "built market data");
     serde_json::to_string(&data)
-        .map_err(|e| format!("could not serialize market data for {symbol}: {e:?}").into())
+        .with_context(|| format!("could not serialize market data for {symbol}"))
 }
