@@ -22,13 +22,13 @@ spec:
             - sh
             - -c
             - |
-              echo "Waiting for Loki to become reachable..."
+              echo "{\"message\":\"Waiting for Loki to become reachable...\"}"
               until nc -z loki-stack.monitoring.svc.cluster.local 3100 && \
                     nc -z redis-proxy.data.svc.cluster.local 6379; do
-                echo "Loki not ready. Sleeping 2 seconds..."
+                echo "{\"message\":\"Loki not ready. Sleeping 2 seconds...\"}"
                 sleep 2
               done
-              echo "Loki is online! Proceeding with price-cacher startup."
+              echo "{\"message\":\"Loki is online! Proceeding with price-cacher startup.\"}"
       containers:
         - name: price-cacher
           image: price-cacher-image
