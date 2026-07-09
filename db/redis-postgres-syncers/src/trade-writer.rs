@@ -1,5 +1,6 @@
 //! Write trades from redis stream (sent by API) to postgres
 
+use anyhow::{Context, Result};
 use dotenvy::dotenv;
 use redis::AsyncCommands;
 use redis::streams::{
@@ -9,7 +10,7 @@ use redis::streams::{
 use serde::Deserialize;
 use std::fmt::Write;
 use tokio::time::{Duration, Instant};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 // ADJUSTABLE
 
@@ -57,13 +58,11 @@ async fn main() {
     }
 
     if let Err(err) = run().await {
-        error!(?err, "Fatal error");
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        std::process::exit(1);
+        helpers::fatal("Fatal error", err).await;
     }
 }
 
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
+async fn run() -> Result<()> {
     let pg_config = helpers::require_env("POSTGRES_CONFIG")?;
     let redis_url = helpers::require_env("REDIS_URL")?;
     let stream_name = helpers::require_env("REDIS_STREAM_NAME")?;
@@ -84,7 +83,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         if e.to_string().contains("BUSYGROUP") {
             debug!("Consumer group '{}' already exists", consumer_group);
         } else {
-            error!(?e, "Initializing consumer group failed");
+            helpers::fatal("initializing consumer group failed", e).await;
         }
     }
 
@@ -124,20 +123,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 match res {
                     Ok(r) => r,
                     Err(e) => {
-                        error!(?e, "Redis stream read failed");
-                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                        std::process::exit(1);
+                        helpers::fatal("Redis stream read failed", e).await
                     }
                 }
             }
             () = helpers::shutdown_signal() => {
-                info!("Shutdown signal received. Exiting loop gracefully...");
+                info!("Shutdown signal received");
                 return Ok(());
             }
         };
 
         if !(reply.keys.is_empty() || reply.keys[0].ids.is_empty()) {
             let ids: Vec<StreamId> = reply.keys.into_iter().flat_map(|key| key.ids).collect();
+            debug!("read {} new message(s) from stream", ids.len());
             process_batch(
                 &mut pg_client,
                 &mut redis_conn,
@@ -181,6 +179,8 @@ async fn reclaim_abandoned(
     worker_name: &str,
     copy_payload_buffer: &mut String,
 ) {
+    trace!("sweeping pending list for abandoned messages");
+
     // XAUTOCLAIM walks the group's pending list from this cursor; "0-0" starts at
     // the beginning and each reply tells us where to resume (or "0-0" when done).
     let mut cursor = "0-0".to_string();
@@ -199,8 +199,8 @@ async fn reclaim_abandoned(
             .await
         {
             Ok(r) => r,
-            Err(e) => {
-                error!(?e, "failed to XAUTOCLAIM abandoned messages");
+            Err(err) => {
+                error!(?err, "failed to XAUTOCLAIM abandoned messages");
                 return;
             }
         };
@@ -253,9 +253,9 @@ async fn process_batch(
             "Decoded no valid rows, ACK+trimming {} bad messages to discard them.",
             msg_ids.len()
         );
-        if let Err(e) = ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await
+        if let Err(err) = ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await
         {
-            error!(?e, "Failed to ACK and trim bad messages in Redis");
+            error!(?err, "Failed to ACK and trim bad messages in Redis");
         }
         return;
     }
@@ -267,41 +267,46 @@ async fn process_batch(
     };
 
     // xack and trim messages in redis ONLY after postgres confirms the write.
-    if write_result.is_ok() {
-        info!("Successfully copied {} rows", msg_ids.len());
+    match write_result {
+        Ok(()) => {
+            info!("Successfully copied {} rows", msg_ids.len());
 
-        match ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await {
-            Ok(()) => debug!("ACK+trimmed {} messages from redis stream", msg_ids.len()),
-            Err(e) => error!(
-                ?e,
-                "Failed to ACK+trim {} messages from redis stream",
-                msg_ids.len()
-            ),
+            match ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await {
+                Ok(()) => debug!("ACK+trimmed {} messages from redis stream", msg_ids.len()),
+                Err(err) => error!(
+                    ?err,
+                    "Failed to ACK+trim {} messages from redis stream",
+                    msg_ids.len()
+                ),
+            }
         }
+        Err(err) => error!(
+            ?err,
+            "postgres write failed; leaving messages un-ACKed for retry"
+        ),
     }
 }
 
 /// COPY the payload buffer straight into `trades` table.
 ///
 /// Used for fresh messages, which are not expected to collide. Returns `Err`
-/// (probably already logged) on failure so the caller knows not to ACK.
+/// on failure so the caller knows not to ACK.
 async fn copy_direct(
     pg_client: &tokio_postgres::Client,
     copy_payload_buffer: &str,
-) -> Result<(), ()> {
-    let sink = match pg_client.copy_in(DIRECT_COPY_QUERY).await {
-        Ok(sink) => sink,
-        Err(e) => {
-            error!(?e, "Failed to initialize postgres COPY sink");
-            return Err(());
-        }
-    };
+) -> Result<()> {
+    let sink = pg_client
+        .copy_in(DIRECT_COPY_QUERY)
+        .await
+        .map_err(helpers::pg_error)
+        .context("Failed to initialize postgres COPY sink")?;
 
     // Send the entire batch over the network in one chunk
-    if let Err(e) = helpers::send_copy_payload(sink, copy_payload_buffer).await {
-        error!(err = ?helpers::map_postgres_error(&e), "COPY failed. transaction aborted");
-        return Err(());
-    }
+    helpers::send_copy_payload(sink, copy_payload_buffer)
+        .await
+        .map_err(helpers::pg_error)
+        .context("COPY failed, transaction aborted")?;
+
     Ok(())
 }
 
@@ -315,46 +320,42 @@ async fn copy_direct(
 async fn copy_via_staging(
     pg_client: &mut tokio_postgres::Client,
     copy_payload_buffer: &str,
-) -> Result<(), ()> {
+) -> Result<()> {
     // use single `Transaction` for the whole thing
-    let tx = match pg_client.transaction().await {
-        Ok(tx) => tx,
-        Err(e) => {
-            error!(err = ?helpers::map_postgres_error(&e), "Failed to open db transaction (for staging)");
-            return Err(());
-        }
-    };
+    let tx = pg_client
+        .transaction()
+        .await
+        .map_err(helpers::pg_error)
+        .context("Failed to open db transaction (for staging)")?;
 
-    if let Err(e) = tx.batch_execute(CREATE_STAGE_QUERY).await {
-        error!(err = ?helpers::map_postgres_error(&e), "Failed to create staging table");
-        return Err(());
-    }
+    tx.batch_execute(CREATE_STAGE_QUERY)
+        .await
+        .map_err(helpers::pg_error)
+        .context("Failed to create staging table")?;
 
     // Scope the sink so it is dropped before we run the upsert on `tx`.
     {
-        let sink = match tx.copy_in(STAGE_COPY_QUERY).await {
-            Ok(sink) => sink,
-            Err(e) => {
-                error!(err = ?helpers::map_postgres_error(&e), "Failed to initialize staging COPY context");
-                return Err(());
-            }
-        };
+        let sink = tx
+            .copy_in(STAGE_COPY_QUERY)
+            .await
+            .map_err(helpers::pg_error)
+            .context("Failed to initialize staging COPY context")?;
 
-        if let Err(e) = helpers::send_copy_payload(sink, copy_payload_buffer).await {
-            error!(err = ?helpers::map_postgres_error(&e), "COPY into staging table failed");
-            return Err(());
-        }
+        helpers::send_copy_payload(sink, copy_payload_buffer)
+            .await
+            .map_err(helpers::pg_error)
+            .context("COPY into staging table failed")?;
     }
 
-    if let Err(e) = tx.batch_execute(UPSERT_QUERY).await {
-        error!(err = ?helpers::map_postgres_error(&e), "Upsert from staging table failed");
-        return Err(());
-    }
+    tx.batch_execute(UPSERT_QUERY)
+        .await
+        .map_err(helpers::pg_error)
+        .context("Upsert from staging table failed")?;
 
-    if let Err(e) = tx.commit().await {
-        error!(err = ?helpers::map_postgres_error(&e), "Committing staging transaction failed");
-        return Err(());
-    }
+    tx.commit()
+        .await
+        .map_err(helpers::pg_error)
+        .context("Committing staging transaction failed")?;
 
     Ok(())
 }
@@ -373,8 +374,8 @@ fn build_payload_buffer(copy_payload_buffer: &mut String, ids: &[StreamId]) -> V
 
         let trade: TradePayload = match rmp_serde::from_slice(bytes) {
             Ok(t) => t,
-            Err(e) => {
-                warn!(?e, "Failed to decode payload for {}", record.id);
+            Err(err) => {
+                warn!(?err, "Failed to decode payload for {}", record.id);
                 continue; // Skip badly serialized record
             }
         };

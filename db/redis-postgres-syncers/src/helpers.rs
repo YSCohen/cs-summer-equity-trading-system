@@ -1,37 +1,41 @@
 //! common functions for these bins
 
+use anyhow::{Context, Result};
 use bytes::Bytes;
 use futures_util::SinkExt;
+use serde::Deserialize;
 use std::env;
-use std::error::Error;
 use tokio_postgres::{Client, CopyInSink, NoTls};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 use tracing_loki::url::Url;
 use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Read a required environment variable, or return a descriptive error.
-pub fn require_env(name: &str) -> Result<String, Box<dyn Error>> {
-    env::var(name).map_err(|_| format!("{name} must be set").into())
+pub fn require_env(name: &str) -> Result<String> {
+    env::var(name).with_context(|| format!("{name} must be set"))
+}
+
+/// Log a specific fatal error, wait 1/2 sec, then exit
+///
+/// Returns `!` so it can be used directly in a `match` arm
+pub async fn fatal(message: &str, err: impl std::fmt::Debug) -> ! {
+    error!(?err, message);
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    std::process::exit(1);
 }
 
 /// Open a multiplexed async redis connection, or log the error and exit.
 pub async fn connect_redis(url: String) -> redis::aio::MultiplexedConnection {
     let client = match redis::Client::open(url) {
         Ok(client) => client,
-        Err(e) => {
-            error!(?e, "failed to open redis client");
-            std::process::exit(1);
-        }
+        Err(e) => fatal("failed to open redis client", e).await,
     };
     match client.get_multiplexed_async_connection().await {
         Ok(conn) => {
             debug!("connected to redis");
             conn
         }
-        Err(e) => {
-            error!(?e, "failed to connect to redis");
-            std::process::exit(1);
-        }
+        Err(e) => fatal("failed to connect to redis", e).await,
     }
 }
 
@@ -39,28 +43,23 @@ pub async fn connect_redis(url: String) -> redis::aio::MultiplexedConnection {
 pub async fn connect_postgres(config: &str) -> Client {
     let (client, connection) = match tokio_postgres::connect(config, NoTls).await {
         Ok(pair) => pair,
-        Err(e) => {
-            error!(?e, "failed to connect to postgres");
-            std::process::exit(1);
-        }
+        Err(e) => fatal("failed to connect to postgres", e).await,
     };
     tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            error!(?e, "postgres connection driver error");
+        if let Err(err) = connection.await {
+            error!(?err, "postgres connection driver error");
         }
     });
     debug!("connected to postgres");
     client
 }
 
-/// Map a postgres error to the most informative value to log.
-///
-/// A `DbError` carries the server-side detail (code, message, hint), so prefer
-/// it when present and fall back to the raw error otherwise.
-pub fn map_postgres_error(err: &tokio_postgres::Error) -> &dyn std::fmt::Debug {
+/// Convert a postgres-related error into an `anyhow::Error` that includes
+/// postgres info if it was a `DbError`
+pub fn pg_error(err: tokio_postgres::Error) -> anyhow::Error {
     match err.as_db_error() {
-        Some(db_error) => db_error,
-        None => err,
+        Some(db_error) => anyhow::anyhow!("{db_error:?}"),
+        None => anyhow::Error::new(err),
     }
 }
 
@@ -75,11 +74,11 @@ pub async fn send_copy_payload(
     Ok(())
 }
 
-pub fn init_tracing(app_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let loki_url = env::var("LOKI_URL").map_err(|_| "LOKI_URL must be set")?;
-    let worker_name = env::var("WORKER_NAME").map_err(|_| "WORKER_NAME must be set")?;
+pub fn init_tracing(app_name: &str) -> Result<()> {
+    let loki_url = env::var("LOKI_URL").context("LOKI_URL must be set")?;
+    let worker_name = env::var("WORKER_NAME").context("WORKER_NAME must be set")?;
 
-    let loki_url = Url::parse(&loki_url)?;
+    let loki_url = Url::parse(&loki_url).context("LOKI_URL is not a valid URL")?;
     let (loki_layer, loki_task) = tracing_loki::builder()
         .label("app", app_name)?
         .label("pod", worker_name)?
@@ -130,4 +129,34 @@ pub async fn shutdown_signal() {
         () = ctrl_c => {},
         () = terminate => {},
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct Record {
+    #[serde(rename = "Symbol")]
+    symbol: String,
+}
+
+pub async fn fetch_sp500_symbols() -> Result<Vec<String>> {
+    const URL: &str = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv";
+    let response = reqwest::get(URL)
+        .await
+        .context("request for S&P 500 csv failed")?
+        .text()
+        .await
+        .context("reading S&P 500 csv body failed")?;
+    debug!("fetched S&P 500 csv ({} bytes)", response.len());
+
+    let mut rdr = csv::Reader::from_reader(response.as_bytes());
+    let mut symbols = Vec::new();
+
+    for result in rdr.deserialize() {
+        let record: Record = result.context("malformed row in S&P 500 csv")?;
+        // Fix for symbols that Yahoo represents differently (e.g., BRK.B instead of BRK-B)
+        let formatted_symbol = record.symbol.replace('.', "-");
+        trace!(symbol = %formatted_symbol, "parsed symbol");
+        symbols.push(formatted_symbol);
+    }
+
+    Ok(symbols)
 }
