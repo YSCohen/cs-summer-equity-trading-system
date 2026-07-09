@@ -9,7 +9,7 @@ use redis::streams::{
 use serde::Deserialize;
 use std::fmt::Write;
 use tokio::time::{Duration, Instant};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 // ADJUSTABLE
 
@@ -57,9 +57,7 @@ async fn main() {
     }
 
     if let Err(err) = run().await {
-        error!(?err, "Fatal error");
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        std::process::exit(1);
+        helpers::fatal("Fatal error", err).await;
     }
 }
 
@@ -84,7 +82,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         if e.to_string().contains("BUSYGROUP") {
             debug!("Consumer group '{}' already exists", consumer_group);
         } else {
-            error!(?e, "Initializing consumer group failed");
+            helpers::fatal("initializing consumer group failed", e).await;
         }
     }
 
@@ -124,20 +122,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 match res {
                     Ok(r) => r,
                     Err(e) => {
-                        error!(?e, "Redis stream read failed");
-                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                        std::process::exit(1);
+                        helpers::fatal("Redis stream read failed", e).await
                     }
                 }
             }
             () = helpers::shutdown_signal() => {
-                info!("Shutdown signal received. Exiting loop gracefully...");
+                info!("Shutdown signal received");
                 return Ok(());
             }
         };
 
         if !(reply.keys.is_empty() || reply.keys[0].ids.is_empty()) {
             let ids: Vec<StreamId> = reply.keys.into_iter().flat_map(|key| key.ids).collect();
+            debug!("read {} new message(s) from stream", ids.len());
             process_batch(
                 &mut pg_client,
                 &mut redis_conn,
@@ -181,6 +178,8 @@ async fn reclaim_abandoned(
     worker_name: &str,
     copy_payload_buffer: &mut String,
 ) {
+    trace!("sweeping pending list for abandoned messages");
+
     // XAUTOCLAIM walks the group's pending list from this cursor; "0-0" starts at
     // the beginning and each reply tells us where to resume (or "0-0" when done).
     let mut cursor = "0-0".to_string();

@@ -14,9 +14,8 @@
 
 use dotenvy::dotenv;
 use redis::aio::MultiplexedConnection;
-use serde::Deserialize;
 use std::error::Error;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, trace, warn};
 use yahoo_finance_api as yahoo;
 
 /// Retention of the raw 1-minute source series (1 hour, in milliseconds).
@@ -62,9 +61,7 @@ async fn main() {
     }
 
     if let Err(err) = run().await {
-        error!(?err, "Fatal error");
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        std::process::exit(1);
+        helpers::fatal("Fatal error", err).await;
     }
 }
 
@@ -74,11 +71,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .parse()
         .map_err(|_| "DELAY must be an int")?;
 
-    debug!("read env vars");
+    debug!(interval, "read env vars");
 
     let mut redis_conn = helpers::connect_redis(redis_url).await;
 
-    let symbols = fetch_sp500_symbols().await?;
+    let symbols = match helpers::fetch_sp500_symbols().await {
+        Ok(symbols) => symbols,
+        Err(err) => helpers::fatal("could not fetch S&P 500 symbol list", err).await,
+    };
+
+    info!("fetched {} S&P 500 symbols", symbols.len());
 
     // Provision the raw series + compaction rules once. This is idempotent:
     // already-provisioned symbols are skipped.
@@ -87,18 +89,27 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         symbols.len()
     );
     for symbol in &symbols {
-        ensure_series(&mut redis_conn, symbol).await?;
+        if let Err(err) = ensure_series(&mut redis_conn, symbol).await {
+            helpers::fatal(
+                &format!("failed to provision time series for {symbol}"),
+                err,
+            )
+            .await;
+        }
     }
-    debug!("ensured all time series");
+    debug!("ensured {} time series", symbols.len());
 
     loop {
-        append_all_latest_samples(&mut redis_conn, &symbols).await?;
-        info!("appended latest samples for all symbols");
+        match append_all_latest_samples(&mut redis_conn, &symbols).await {
+            Ok(appended) => info!("appended {appended} latest samples"),
+            Err(err) => helpers::fatal("failed to append latest samples to redis", err).await,
+        }
 
+        debug!(interval, "sleeping until next append cycle");
         tokio::select! {
             () = tokio::time::sleep(std::time::Duration::from_secs(interval)) => {}
             () = helpers::shutdown_signal() => {
-                info!("Shutdown signal received. Exiting loop gracefully...");
+                info!("Shutdown signal received");
                 return Ok(());
             }
         }
@@ -123,11 +134,14 @@ async fn ensure_series(
     let exists: bool = redis::cmd("EXISTS")
         .arg(&raw)
         .query_async(redis_conn)
-        .await?;
+        .await
+        .map_err(|e| format!("EXISTS check for {raw} failed: {e:?}"))?;
     if exists {
+        trace!(symbol, "raw series already provisioned, skipping");
         return Ok(());
     }
 
+    debug!(symbol, "provisioning raw series and compaction tiers");
     // raw 1-minute source that everything else is compacted from
     create_series(redis_conn, &raw, RAW_RETENTION_MS, symbol, "1m").await?;
 
@@ -135,6 +149,7 @@ async fn ensure_series(
         let dest = format!("{raw}:{}", tier.suffix);
         create_series(redis_conn, &dest, tier.retention_ms, symbol, tier.suffix).await?;
         create_rule(redis_conn, &raw, &dest, tier.bucket_ms).await?;
+        trace!(symbol, tier = tier.suffix, "provisioned tier");
     }
 
     Ok(())
@@ -159,7 +174,7 @@ async fn create_series(
         .arg("tier")
         .arg(tier);
 
-    run_ignoring_exists(redis_conn, &cmd).await
+    run_ignoring_exists(redis_conn, &cmd, &format!("TS.CREATE {key}")).await
 }
 
 async fn create_rule(
@@ -177,23 +192,34 @@ async fn create_rule(
         .arg("last")
         .arg(bucket_ms);
 
-    run_ignoring_exists(redis_conn, &cmd).await
+    run_ignoring_exists(
+        redis_conn,
+        &cmd,
+        &format!("TS.CREATERULE {source} -> {dest}"),
+    )
+    .await
 }
 
 /// Run a command, swallowing the benign errors RedisTimeSeries returns when a
-/// series or rule was already created by a previous run.
+/// series or rule was already created by a previous run. `label` names the
+/// command for logging and for the error message on a genuine failure.
 async fn run_ignoring_exists(
     redis_conn: &mut MultiplexedConnection,
     cmd: &redis::Cmd,
+    label: &str,
 ) -> Result<(), Box<dyn Error>> {
     match cmd.query_async::<()>(redis_conn).await {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            trace!("{label} ok");
+            Ok(())
+        }
         Err(e) => {
             let msg = e.to_string().to_lowercase();
             if msg.contains("already exists") || msg.contains("already has") {
+                trace!("{label} already provisioned, ignoring");
                 Ok(())
             } else {
-                Err(e.into())
+                Err(format!("{label} failed: {e:?}").into())
             }
         }
     }
@@ -204,41 +230,63 @@ async fn run_ignoring_exists(
 async fn append_all_latest_samples(
     redis_conn: &mut MultiplexedConnection,
     symbols: &[String],
-) -> Result<(), Box<dyn Error>> {
+) -> Result<usize, Box<dyn Error>> {
     let mut pipe = redis::pipe();
+    let mut queued = 0;
+    let mut skipped = 0;
 
     for symbol in symbols {
         let (timestamp_ms, price) = match get_latest_sample(symbol).await {
             Ok(sample) => sample,
             Err(err) => {
                 warn!(symbol, ?err, "skipping symbol with no usable price");
+                skipped += 1;
                 continue;
             }
         };
 
+        trace!(symbol, timestamp_ms, price, "queued sample");
         pipe.cmd("TS.ADD")
             .arg(raw_key(symbol))
             .arg(timestamp_ms)
             .arg(price)
             .arg("ON_DUPLICATE")
             .arg("LAST");
+        queued += 1;
     }
-    debug!("wrote latest samples for all symbols to pipe...");
 
-    pipe.query_async::<()>(redis_conn).await?;
-    debug!("executed pipe");
+    if skipped > 0 {
+        warn!("skipped {skipped} symbols with no usable price this cycle");
+    }
 
-    Ok(())
+    if queued == 0 {
+        warn!("no usable price for any symbol this cycle; nothing appended");
+        return Ok(0);
+    }
+
+    debug!("appending {queued} samples to redis in one pipeline");
+    pipe.query_async::<()>(redis_conn)
+        .await
+        .map_err(|e| format!("redis pipeline TS.ADD of {queued} samples failed: {e:?}"))?;
+    debug!("redis pipeline executed");
+
+    Ok(queued)
 }
 
 /// Latest `(timestamp_ms, price)` for a symbol from yahoo's 1-minute intraday
 /// feed. Walks back from the most recent bar to skip trailing empty candles,
 /// whose close yahoo reports as NaN.
 async fn get_latest_sample(symbol: &str) -> Result<(i64, f64), Box<dyn Error>> {
-    let provider = yahoo::YahooConnector::new()?;
+    let provider = yahoo::YahooConnector::new()
+        .map_err(|e| format!("could not construct yahoo client: {e:?}"))?;
 
-    let response = provider.get_quote_range(symbol, "1m", "1d").await?;
-    let quotes = response.quotes()?;
+    let response = provider
+        .get_quote_range(symbol, "1m", "1d")
+        .await
+        .map_err(|e| format!("yahoo quote request failed: {e:?}"))?;
+    let quotes = response
+        .quotes()
+        .map_err(|e| format!("yahoo response had no usable quotes: {e:?}"))?;
 
     let quote = quotes
         .iter()
@@ -250,28 +298,4 @@ async fn get_latest_sample(symbol: &str) -> Result<(i64, f64), Box<dyn Error>> {
     let timestamp_ms = (quote.timestamp as i64) * 1000;
 
     Ok((timestamp_ms, quote.close))
-}
-
-#[derive(Debug, Deserialize)]
-struct Record {
-    #[serde(rename = "Symbol")]
-    symbol: String,
-}
-
-async fn fetch_sp500_symbols() -> Result<Vec<String>, Box<dyn Error>> {
-    let response = reqwest::get("https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv").await?.text().await?;
-    debug!("fetched S&P 500 csv");
-
-    let mut rdr = csv::Reader::from_reader(response.as_bytes());
-    let mut symbols = Vec::new();
-
-    for result in rdr.deserialize() {
-        let record: Record = result?;
-        // Fix for symbols that Yahoo represents differently (e.g., BRK.B instead of BRK-B)
-        let formatted_symbol = record.symbol.replace('.', "-");
-        symbols.push(formatted_symbol);
-    }
-    debug!("parsed S&P 500 csv into symbol Vec");
-
-    Ok(symbols)
 }

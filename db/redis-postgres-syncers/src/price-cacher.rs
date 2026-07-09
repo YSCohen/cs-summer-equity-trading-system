@@ -4,10 +4,10 @@
 use dotenvy::dotenv;
 use jiff::Timestamp;
 use redis::aio::MultiplexedConnection;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::error::Error;
-use tracing::{debug, error, info};
-use yahoo_finance_api as yahoo;
+use tracing::{debug, info, trace, warn};
+use yahoo_finance_api::{self as yahoo, YahooConnector};
 
 #[tokio::main]
 async fn main() {
@@ -20,9 +20,7 @@ async fn main() {
     }
 
     if let Err(err) = run().await {
-        error!(?err, "Fatal error");
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        std::process::exit(1);
+        helpers::fatal("Fatal error", err).await;
     }
 }
 
@@ -32,42 +30,84 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .parse()
         .map_err(|_| "DELAY must be an int")?;
 
-    debug!("read env vars");
+    debug!(interval, "read env vars");
 
     let mut redis_conn = helpers::connect_redis(redis_url).await;
 
-    let symbols = fetch_sp500_symbols().await?;
+    let symbols = match helpers::fetch_sp500_symbols().await {
+        Ok(symbols) => symbols,
+        Err(err) => helpers::fatal("could not fetch S&P 500 symbol list", err).await,
+    };
+
+    if symbols.len() == 500 {
+        info!("fetched S&P 500 symbol list");
+    } else {
+        warn!("got {} symbols instead of 500", symbols.len());
+    }
 
     loop {
-        update_all_cached_prices(&mut redis_conn, &symbols).await?;
-        info!("updated all cached prices");
+        match update_all_cached_prices(&mut redis_conn, &symbols).await {
+            Ok(cached) => info!("updated {cached} cached prices"),
+            Err(err) => helpers::fatal("failed to write cached prices to redis", err).await,
+        }
 
+        debug!(interval, "sleeping until next sync cycle");
         tokio::select! {
             () = tokio::time::sleep(std::time::Duration::from_secs(interval)) => {}
             () = helpers::shutdown_signal() => {
-                info!("Shutdown signal received. Exiting loop gracefully...");
+                info!("Shutdown signal received");
                 return Ok(());
             }
         }
     }
 }
 
+/// a symbol with no usable quote will be skipped rather than aborting the whole
+/// cycle. only a redis write failure is reported as an error.
+/// returns the number of quotes written.
 async fn update_all_cached_prices(
     redis_conn: &mut MultiplexedConnection,
     symbols: &[String],
-) -> Result<(), Box<dyn Error>> {
+) -> Result<usize, Box<dyn Error>> {
     let mut pipe = redis::pipe();
+    let mut queued = 0;
+    let mut skipped = 0;
+
+    let provider = match yahoo::YahooConnector::new() {
+        Ok(p) => p,
+        Err(e) => helpers::fatal("could not construct yahoo client", e).await,
+    };
 
     for symbol in symbols {
-        let quote = get_quote_json(symbol).await?;
-        pipe.hset("market_prices", symbol, &quote);
+        match get_quote_json(symbol, &provider).await {
+            Ok(quote) => {
+                trace!("queued {symbol} quote for caching");
+                pipe.hset("market_prices", symbol, &quote);
+                queued += 1;
+            }
+            Err(err) => {
+                warn!(?err, "could not get quote for {symbol}. skipping");
+                skipped += 1;
+            }
+        }
     }
-    debug!("wrote quotes for all symbols to pipe...");
 
-    pipe.query_async::<()>(redis_conn).await?;
-    debug!("executed pipe");
+    if skipped > 0 {
+        warn!("skipped {skipped} symbols with no usable quote");
+    }
 
-    Ok(())
+    if queued == 0 {
+        warn!("no usable quotes for any symbol. cycle aborted");
+        return Ok(0);
+    }
+
+    debug!("writing {queued} quotes to redis in one pipeline");
+    match pipe.query_async::<()>(redis_conn).await {
+        Ok(_) => debug!("redis pipeline executed"),
+        Err(e) => helpers::fatal("failed to execute redis pipeline", e).await,
+    }
+
+    Ok(queued)
 }
 
 #[derive(Serialize)]
@@ -77,47 +117,31 @@ struct MarketData {
     latest_time: String,
 }
 
-async fn get_quote_json(symbol: &str) -> Result<String, Box<dyn Error>> {
-    let provider = yahoo::YahooConnector::new()?;
-
+async fn get_quote_json(symbol: &str, provider: &YahooConnector) -> Result<String, Box<dyn Error>> {
     // 1-minute intervals for the current day
-    let response = provider.get_quote_range(symbol, "1m", "1d").await?;
-    let quotes = response.quotes()?;
+    let response = provider
+        .get_quote_range(symbol, "1m", "1d")
+        .await
+        .map_err(|e| format!("yahoo quote request failed: {e:?}"))?;
 
-    // first in day is open, last is latest available
-    let first_quote = quotes.first().ok_or("No opening price data found")?;
-    let last_quote = quotes.last().ok_or("No current price data found")?;
+    let quotes = response
+        .quotes()
+        .map_err(|e| format!("yahoo response had no usable quotes: {e:?}"))?;
+
+    // first bar in day is open, last is latest available
+    let first_quote = quotes.first().ok_or("no opening price data found")?;
+    let last_quote = quotes.last().ok_or("no current price data found")?;
 
     let data = MarketData {
         open_price: first_quote.open,
         latest_price: last_quote.close,
         // ts will be string formatted in ISO 8601 - YYYY-MM-DDTHH:MM:SSZ
-        latest_time: Timestamp::from_second(last_quote.timestamp as i64)?.to_string(),
+        latest_time: Timestamp::from_second(last_quote.timestamp as i64)
+            .map_err(|e| format!("invalid latest timestamp {}: {e:?}", last_quote.timestamp))?
+            .to_string(),
     };
 
-    Ok(serde_json::to_string(&data)?)
-}
-
-#[derive(Debug, Deserialize)]
-struct Record {
-    #[serde(rename = "Symbol")]
-    symbol: String,
-}
-
-async fn fetch_sp500_symbols() -> Result<Vec<String>, Box<dyn Error>> {
-    let response = reqwest::get("https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv").await?.text().await?;
-    debug!("fetched S&P 500 csv");
-
-    let mut rdr = csv::Reader::from_reader(response.as_bytes());
-    let mut symbols = Vec::new();
-
-    for result in rdr.deserialize() {
-        let record: Record = result?;
-        // Fix for symbols that Yahoo represents differently (e.g., BRK.B instead of BRK-B)
-        let formatted_symbol = record.symbol.replace('.', "-");
-        symbols.push(formatted_symbol);
-    }
-    debug!("parsed S&P 500 csv into symbol Vec");
-
-    Ok(symbols)
+    trace!(symbol, latest = data.latest_price, "built market data");
+    serde_json::to_string(&data)
+        .map_err(|e| format!("could not serialize market data for {symbol}: {e:?}").into())
 }
