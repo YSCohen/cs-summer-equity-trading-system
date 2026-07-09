@@ -1,18 +1,9 @@
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: traefik-bridge
-  namespace: kube-system
-spec:
-  type: ExternalName
-  externalName: traefik.kube-system.svc.cluster.local
----
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: streamlit-tailscale-entry
-  namespace: backend
+  name: tailscale-ui-entry
+  namespace: backend  # <-- Change if your UI is in a different namespace
 spec:
   ingressClassName: tailscale
   tls:
@@ -29,3 +20,34 @@ spec:
                 name: traefik-bridge
                 port:
                   number: 80
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: traefik-bridge
+#   namespace: kube-system
+# spec:
+#   type: ExternalName
+#   externalName: traefik.kube-system.svc.cluster.local
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: streamlit-tailscale-entry
+#   namespace: backend
+# spec:
+#   ingressClassName: tailscale
+#   tls:
+#     - hosts:
+#         - ui
+#   rules:
+#     - host: ui
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: traefik-bridge
+#                 port:
+#                   number: 80

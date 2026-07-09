@@ -41,27 +41,6 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: tailscale-ui-entry
-spec:
-  ingressClassName: tailscale
-  tls:
-    - hosts:
-        - ui
-  rules:
-    - host: ui
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: traefik-bridge # Funnels the 'ui' traffic into Traefik
-                port:
-                  number: 80
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
   name: adminer-ingress
 spec:
   ingressClassName: tailscale
