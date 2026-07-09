@@ -32,3 +32,30 @@ patches:
                 env:
                   - name: ENVIRONMENT
                     value: "dev-will"
+  # Local laptop dev only (dev-will): base gives Streamlit just 100m CPU
+  # requested / 500m limit. Under cluster-wide CPU contention that's not
+  # enough to reliably serve the AgGrid component's iframe/JS bundle before
+  # the browser gives up ("Your app is having trouble loading the ...
+  # component"). Raising the *request* (not just the limit) gives these pods
+  # a bigger cpu.shares weight so the scheduler favors them under contention,
+  # not just a higher ceiling.
+  - target:
+      kind: Deployment
+      name: streamlit
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: streamlit
+      spec:
+        template:
+          spec:
+            containers:
+              - name: streamlit
+                resources:
+                  requests:
+                    cpu: "300m"
+                    memory: "512Mi"
+                  limits:
+                    cpu: "1000m"
+                    memory: "1Gi"
