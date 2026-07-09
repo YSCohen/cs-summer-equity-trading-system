@@ -146,8 +146,46 @@ def _render_preview_grid(rows: list[dict]):
     )
 
 
+def _reset_mass_trade_state():
+    """Clears everything about the last batch so the page goes back to
+    a blank paste box."""
+    st.session_state.mass_trade_submitted = False
+    st.session_state.mass_trade_last_result = None
+    st.session_state.mass_trade_last_rows = None
+    st.session_state.mass_trade_raw_text = ""
+
+
+def _render_success_state():
+    """Renders the post-submission view: the same preview grid that was
+    showing right before submit (so you can see exactly what was
+    booked), with "Book More Trades" up top in place of the submit
+    button. No submit control is rendered here, so there's no way to
+    re-book the same batch."""
+    payload, data = st.session_state.mass_trade_last_result
+    rows = st.session_state.get("mass_trade_last_rows", [])
+
+    if st.button("📋 Book More Trades", type="primary"):
+        _reset_mass_trade_state()
+        st.rerun()
+
+    st.success(f"✅ {len(payload)} trades submitted successfully.")
+
+    if rows:
+        _render_preview_grid(rows)
+
+
 def render_mass_trade_page():
     st.header("📋 Mass Trade Booker")
+
+    # Once a batch has been submitted, show only the success state above
+    # (with "Book More Trades" up top) until the user explicitly starts a
+    # new batch. This makes re-submission of the same batch impossible on
+    # a stray rerun, since the paste form and submit form below are never
+    # even rendered while this is true.
+    if st.session_state.get("mass_trade_submitted"):
+        _render_success_state()
+        return
+
     st.caption("Paste or type trades below, one per line.")
 
     st.markdown("""
@@ -162,12 +200,23 @@ def render_mass_trade_page():
     Direction must be `Buy` or `Sell`. Account name must match exactly.
     """)
 
-    raw_text = st.text_area(
-        "Trades",
-        height=300,
-        placeholder=EXAMPLE_TEXT,
-        key="mass_trade_input",
-    )
+    # This lives in its own form. Cmd/Ctrl+Enter inside a text_area submits
+    # whichever form contains it — isolating the paste box here means that
+    # keystroke can only ever trigger "Preview Trades" below, and has no
+    # way to reach (or auto-fire) the real submit button further down.
+    with st.form("mass_trade_paste_form"):
+        raw_text_input = st.text_area(
+            "Trades",
+            height=300,
+            placeholder=EXAMPLE_TEXT,
+            value=st.session_state.get("mass_trade_raw_text", ""),
+        )
+        preview_clicked = st.form_submit_button("Preview Trades")
+
+    if preview_clicked:
+        st.session_state.mass_trade_raw_text = raw_text_input
+
+    raw_text = st.session_state.get("mass_trade_raw_text", "")
 
     if not raw_text.strip():
         return
@@ -200,7 +249,42 @@ def render_mass_trade_page():
 
     st.divider()
 
-    if st.button(f"Submit {len(valid_rows)} Valid Trades", type="primary"):
+    # Submission lives in its own form too, entirely separate from the
+    # paste form above — it can only ever fire from an explicit click on
+    # its own submit button, never as a side effect of the paste form.
+    # Wrapped in a keyed container so the CSS below only recolors this
+    # specific button, not "Preview Trades" or "Book More Trades" (which
+    # also use type="primary").
+    with st.container(key="mass_trade_submit_container"):
+        st.markdown(
+            """
+            <style>
+            .st-key-mass_trade_submit_container button {
+                background-color: #28a745;
+                border-color: #28a745;
+                color: white;
+            }
+            .st-key-mass_trade_submit_container button:hover {
+                background-color: #218838;
+                border-color: #1e7e34;
+                color: white;
+            }
+            .st-key-mass_trade_submit_container button:active {
+                background-color: #1e7e34;
+                border-color: #1c7430;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.form("mass_trade_submit_form"):
+            submit_clicked = st.form_submit_button(
+                f"Submit {len(valid_rows)} Valid Trades", type="primary"
+            )
+
+    if submit_clicked:
+        st.session_state.mass_trade_last_rows = rows
+
         payload = [
             {
                 "account_id": r["_account_id"],
@@ -217,32 +301,8 @@ def render_mass_trade_page():
         result = submit_trades(payload)
 
         if result["status"] == "success":
+            st.session_state.mass_trade_submitted = True
             st.session_state.mass_trade_last_result = (payload, result["data"])
             st.rerun()
         else:
             st.error(f"Submission failed: {result['message']}")
-
-    # Post-submission success state
-    if st.session_state.get("mass_trade_last_result"):
-        payload, data = st.session_state.mass_trade_last_result
-        st.success(f"✅ {len(payload)} trades submitted successfully.")
-
-        messages = data.get("message", []) if isinstance(data, dict) else []
-        for trade, entry in zip(payload, messages):
-            status_text = entry.get("status", "") if isinstance(entry, dict) else str(entry)
-            trade_id = (
-                status_text.split("trade_id")[-1].strip()
-                if "trade_id" in status_text
-                else None
-            )
-            with st.container(border=True):
-                st.markdown(
-                    f"✅ **{trade['direction']} {trade['quantity']} {trade['ticker']}** "
-                    f"on account `{trade['account_id']}`"
-                )
-                if trade_id:
-                    st.caption(f"Trade ID: `{trade_id}`")
-
-        if st.button("📋 Book More Trades"):
-            st.session_state.mass_trade_last_result = None
-            st.rerun()

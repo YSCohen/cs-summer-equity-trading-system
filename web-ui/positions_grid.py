@@ -3,7 +3,6 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 from account_picker import get_account_name
-from market_data import get_current_price
 
 
 def _format_timestamp(value):
@@ -21,8 +20,11 @@ def _position_row(position, account_id=None):
     """Builds one flat row dict from a single position dict."""
     ticker = position.get("symbol_ticker")
     quantity = position.get("quantity")
-    price = get_current_price(ticker)
-    total_value = price * quantity if (price is not None and quantity is not None) else None
+    price = position.get("latest_price")
+
+    total_value = position.get("position_value")
+    if total_value is None and price is not None and quantity is not None:
+        total_value = price * quantity
 
     return {
         "Account": get_account_name(account_id) if account_id else "—",

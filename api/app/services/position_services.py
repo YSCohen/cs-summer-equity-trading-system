@@ -1,7 +1,11 @@
 from fastapi import HTTPException
+import uuid
 import json
+from datetime import datetime, timezone
 from app.core.redis import redis_client, redis_dictionaries
 from app.core.logging import logger
+from app.core.config import TRADE_STREAM
+from app.services.trade_services import create_payload
 
 
 async def get_all_users_positions(user_id: str):
@@ -267,3 +271,161 @@ async def get_account_ticker_position(ticker: str, account_id: str, user_id: str
             }
             break  # only one account and one ticker
     return positions
+
+
+async def edit_position(
+    user_id: str,
+    existing_trade: dict,
+    new_trade: dict,
+    other_account: str | None,
+    trade_id: str,
+):
+
+    # Revert the position change from the existing trade
+    old_quantity_delta = (
+        -existing_trade["quantity"]
+        if existing_trade["direction"] == "Buy"
+        else existing_trade["quantity"]
+    )
+
+    # Apply the position change from the updated trade
+    new_quantity_delta = (
+        new_trade["quantity"]
+        if new_trade["direction"] == "Buy"
+        else -new_trade["quantity"]
+    )
+
+    lock_names = sorted(
+        {
+            f"account:{existing_trade['account_id']}",
+            f"account:{new_trade['account_id']}",
+            f"position:{existing_trade['account_id']}:{existing_trade['symbol_ticker']}",
+            f"position:{new_trade['account_id']}:{new_trade['ticker']}",
+        }
+    )
+
+    acquired_locks = []
+    locks = [
+        redis_client.lock(
+            name,
+            timeout=30,
+            blocking_timeout=5,
+        )
+        for name in lock_names
+    ]
+
+    try:
+        # Acquire every lock
+        for lock in locks:
+            await lock.acquire()
+            acquired_locks.append(lock)
+
+        writes = []
+
+        # Nothing else can modify either position now
+
+        writes.extend(
+            await update_position_data(
+                str(existing_trade["account_id"]),
+                existing_trade["symbol_ticker"],
+                old_quantity_delta,
+            )
+        )
+
+        writes.extend(
+            await update_position_data(
+                new_trade["account_id"],
+                new_trade["ticker"],
+                new_quantity_delta,
+            )
+        )
+        pipe = redis_client.pipeline(transaction=True)
+
+        for write in writes:
+            pipe.hset(write["dictionary"], write["key"], write["value"])
+
+        packed_bytes = create_payload(
+            new_trade,
+            trade_id,
+            datetime.now(timezone.utc),
+            other_account,
+            user_id,
+        )
+
+        pipe.xadd(TRADE_STREAM, {"d": packed_bytes})
+
+        await pipe.execute()
+
+    finally:
+        # Always release, even if something throws
+        for lock in reversed(acquired_locks):
+            await lock.release()
+
+
+async def update_position_data(
+    account_id: str,
+    ticker: str,
+    quantity_delta: int,
+):
+
+    raw_account = await redis_client.hget(redis_dictionaries[1], account_id)
+    account_data = json.loads(raw_account)
+
+    pipe = redis_client.pipeline()
+
+    for position_uuid in account_data["positions"]:
+        pipe.hget(redis_dictionaries[2], position_uuid)
+
+    results = await pipe.execute()
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    for position_uuid, raw_position in zip(account_data["positions"], results):
+        x_positions = json.loads(raw_position)
+        if x_positions["symbol_ticker"] == ticker:  # Correct account and ticker
+            x_positions["quantity"] += quantity_delta
+            if x_positions["quantity"] < 0 and not account_data["can_short"]:
+                logger.warning("Invalid short attempt")
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Account number {account_id} does not have permission to short",
+                )
+            x_positions["updated_at"] = now
+            return [
+                {
+                    "dictionary": redis_dictionaries[2],
+                    "key": position_uuid,
+                    "value": json.dumps(x_positions),
+                }
+            ]
+
+    if quantity_delta < 0 and not account_data["can_short"]:
+        logger.warning("Invalid short attempt")
+        raise HTTPException(
+            status_code=403,
+            detail=f"Account number {account_id} does not have permission to short",
+        )
+    new_position = quantity_delta
+    position_key = str(uuid.uuid4())
+    position_data = {
+        "account_id": account_id,
+        "symbol_ticker": ticker,
+        "quantity": new_position,
+        "created_at": now,
+        "updated_at": now,
+    }
+    account_data["positions"].append(position_key)
+    account_data["updated_at"] = now
+
+    return [
+        {
+            "dictionary": redis_dictionaries[2],
+            "key": position_key,
+            "value": json.dumps(position_data),
+        },
+        {
+            "dictionary": redis_dictionaries[1],
+            "key": account_id,
+            "value": json.dumps(account_data),
+        },
+    ]

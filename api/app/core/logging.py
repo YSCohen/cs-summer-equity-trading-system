@@ -10,6 +10,8 @@ def json_formatter(record, handler):
         "target": record.channel,
         "message": record.message
     }
+    if record.exc_info:
+        log_entry["exception"] = record.formatted_exception
     return json.dumps(log_entry)
 
 try:

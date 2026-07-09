@@ -23,13 +23,15 @@ status-svc: ## 🔌 ACTIVE NETWORK SERVICES:
 check-sync: ## Verify all sync stages are Ready
 	@$(DOCKER) exec -it k8s-toolbox flux get kustomizations
 
-sync-app: ## Fast-sync the apps layer (Usage: make sync-app)
-	@echo "[Syncing] Pulling latest source and reconciling 3-apps layer..."
-	@$(MAKE) --no-print-directory run CMD="flux reconcile kustomization 3-apps -n flux-system --with-source"
-
 sync: ## Force Flux to reconcile (Accepts LAYER=all, apps, or data-layer)
 	@echo "🔄 Forcing Flux to synchronize Git..."
-	@$(DOCKER) exec -it k8s-toolbox flux reconcile source git dev-repo-sean
+	@REPO=$$( $(DOCKER) exec -it k8s-toolbox kubectl get gitrepositories -n flux-system -o jsonpath='{.items[0].metadata.name}' ); \
+	if [ -n "$$REPO" ]; then \
+		echo "Found repo: $$REPO, reconciling..."; \
+		$(DOCKER) exec -it k8s-toolbox flux reconcile source git $$REPO -n flux-system; \
+	else \
+		echo "⚠️ No GitRepository found in flux-system, skipping source sync."; \
+	fi
 	@if [ "$(LAYER)" = "all" ] || [ -z "$(LAYER)" ]; then \
 		echo "🔄 Syncing all Kustomizations in dependency order..."; \
 		$(DOCKER) exec -it k8s-toolbox flux reconcile kustomization 1-infra --with-source; \

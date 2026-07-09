@@ -3,6 +3,8 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: redis
+  annotations:
+    reloader.stakater.com/auto: "true"
 spec:
   serviceName: "redis"
   replicas: 1

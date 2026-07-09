@@ -4,7 +4,7 @@ from redis.exceptions import RedisError
 import time
 import asyncpg
 from app.core.logging import logger
-from app.core.redis import pool
+#from app.core.redis import pool
 
 
 async def logging_middleware(request: Request, call_next):

@@ -7,6 +7,7 @@ from app.core.logging import logger
 from app.services import ticker_service
 from app.middleware.logging_middleware import logging_middleware
 import time
+import logbook.compat
 
 from app.routers import (
     auth,
@@ -15,6 +16,8 @@ from app.routers import (
     trades,
     health,
 )
+
+logbook.compat.redirect_logging()  # call before uvicorn starts logging
 
 
 @asynccontextmanager

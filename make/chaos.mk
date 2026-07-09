@@ -1,7 +1,7 @@
 # ==========================================
 # 🌪️ CHAOS ENGINEERING (SCALE & KILL)
 # ==========================================
-
+SHELL := /bin/bash
 SCALE_APPS_BANK = fastapi streamlit locust adminer db-syncer trade-writer price-cacher
 SCALE_DATA_BANK = redis postgres pgbouncer
 KILL_BANK = fastapi streamlit locust adminer db-syncer trade-writer price-cacher redis grafana
@@ -120,3 +120,14 @@ chaos-node-stop: ## 🔥 Stopping the primary K3s node (Simulating Server Crash)
 chaos-node-start: ## 🚑 Rebooting the primary K3s node
 	@echo "🚑 Rebooting the primary K3s node..."
 	@$(DOCKER) exec -it k8s-toolbox k3d node start k3d-dev-cluster-server-0
+
+# ------------------------------------------
+# ⚡ RANDOM REDIS KILL (Sentinel Testing)
+# ------------------------------------------
+
+chaos-kill-redis: ## ⚡ Randomly kill one Redis Sentinel pod
+	@echo "🎲 Selecting a random Redis pod to disrupt..."
+	@$(DOCKER) exec -it k8s-toolbox /bin/bash -c \
+	"POD=\$$(kubectl get pods -n data -l app.kubernetes.io/name=redis -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | shuf -n 1); \
+	echo '💀 Killing \$$POD...'; \
+	kubectl delete pod \$$POD -n data"
