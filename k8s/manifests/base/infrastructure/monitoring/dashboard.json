@@ -443,7 +443,7 @@
           "targets": [
             {
               "datasource": { "type": "loki", "uid": "Loki" },
-              "expr": "{app=\"trade-writer\"} | json | __error__=\"\" | (_module_path =~ \"trade_writer|helpers\") or (level !~ \"(?i)debug\") | line_format \"{{.message}}\"",
+              "expr": "{app=\"trade-writer\"} | json | line_format \"{{.message}}\"",
               "refId": "A"
             }
           ]
@@ -470,7 +470,7 @@
                 "type": "loki",
                 "uid": "Loki"
               },
-              "expr": "{app=\"db-syncer\"} | json | __error__=\"\" | (_module_path =~ \"db_syncer|helpers\") or (level !~ \"(?i)debug\") | line_format \"{{.message}}\"",
+              "expr": "{app=\"db-syncer\"}| json | line_format \"{{.message}}\"",
               "refId": "A"
             }
           ]
@@ -497,8 +497,80 @@
                 "type": "loki",
                 "uid": "Loki"
               },
-              "expr": "{app=\"price-cacher\"} | json | __error__=\"\" | (_module_path =~ \"price_cacher|helpers\") or (level !~ \"(?i)debug\") | line_format \"{{.message}}\"",
+              "expr": "{app=\"price-cacher\"} | json | line_format \"{{.message}}\"",
               "refId": "A"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 500,
+      "type": "row",
+      "title": "Errors & Warnings \u2014 All Services",
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 3 },
+      "panels": [
+        {
+          "id": 502,
+          "title": "Errors",
+          "type": "logs",
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 0,
+            "y": 4
+          },
+          "options": {
+            "showTime": true,
+            "sortOrder": "Ascending",
+            "enableLogDetails": true,
+            "wrapLogMessage": true
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "Loki" },
+              "expr": "{level=\"error\"}",
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "loki", "uid": "Loki" },
+              "expr": "{namespace=~\"backend|data|frontend\"} |~ `(?i)(error|exception|fatal|panic)`",
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "id": 503,
+          "title": "Warnings",
+          "type": "logs",
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 12,
+            "y": 4
+          },
+          "options": {
+            "showTime": true,
+            "sortOrder": "Ascending",
+            "enableLogDetails": true,
+            "wrapLogMessage": true
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "Loki" },
+              "expr": "{level=\"warn\"}",
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "loki", "uid": "Loki" },
+              "expr": "{namespace=~\"backend|data|frontend\"} |~ `(?i)(warn|deprecat)`",
+              "refId": "B"
+            },
+            {
+              "datasource": { "type": "loki", "uid": "Loki" },
+              "expr": "{app=\"redis\", namespace=\"data\"} |~ `[0-9]+:[A-Za-z] .* # `",
+              "refId": "C"
             }
           ]
         }

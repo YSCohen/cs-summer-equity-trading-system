@@ -123,7 +123,7 @@ install_worker() {
 # Function to show the current token and IP
 show_token() {
     TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "Unknown")
-    
+
     if sudo test -f /var/lib/rancher/k3s/server/node-token; then
         echo "======================================"
         echo "📍 Control Plane IP: ${TAILSCALE_IP}"
@@ -247,20 +247,95 @@ setup_db_secrets() {
 
 # Function to enable Tailscale Funnel
 update_self() {
-    echo "⬇️ Pulling latest k3s_manager.sh from upstream..."
-    local REPO_URL="https://raw.githubusercontent.com/SM26-Industrial-Software-Dev/equity-trading-system/main/k3s_manager.sh"
-    local TMP_FILE=$(mktemp)
+    local REPO_OWNER="SM26-Industrial-Software-Dev"
+    local REPO_NAME="equity-trading-system"
+    local SCRIPT_PATH="k3s_manager.sh"
 
-    if curl -sSL "$REPO_URL" -o "$TMP_FILE"; then
-        mv "$TMP_FILE" "$0"
-        chmod +x "$0"
-        echo "✅ Successfully updated. Please re-run the script."
-        exit 0
-    else
-        echo "❌ Update failed. Network or repository issue."
-        rm "$TMP_FILE"
-        exit 1
+    read -p "Branch or tag to update from [main]: " REF
+    REF="${REF:-main}"
+
+    local RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}/${SCRIPT_PATH}"
+    local API_URL="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${SCRIPT_PATH}?ref=${REF}"
+    local TMP_FILE
+    TMP_FILE=$(mktemp)
+
+    echo "⬇️  Pulling k3s_manager.sh from '${REF}'..."
+    if ! curl -fsSL "$RAW_URL" -o "$TMP_FILE"; then
+        echo "❌ Update failed: could not download the script (network or repository issue)."
+        rm -f "$TMP_FILE"
+        return 1
     fi
+
+    # 1. Sanity check: non-empty and actually looks like a shell script.
+    if [ ! -s "$TMP_FILE" ] || ! head -n1 "$TMP_FILE" | grep -q '^#!'; then
+        echo "❌ Update aborted: downloaded file is empty or doesn't look like a script."
+        rm -f "$TMP_FILE"
+        return 1
+    fi
+
+    # 2. Syntax check before we trust it at all.
+    if ! bash -n "$TMP_FILE"; then
+        echo "❌ Update aborted: downloaded script failed a syntax check."
+        rm -f "$TMP_FILE"
+        return 1
+    fi
+
+    # 3. Integrity check against GitHub's own record for this file+ref.
+    #    This guards against a truncated/corrupted download or a mismatch
+    #    between the raw and API endpoints. It does NOT protect against a
+    #    genuinely compromised upstream repo -- for that you'd need signed
+    #    commits/tags and to verify the signature, which this repo doesn't
+    #    currently publish.
+    echo "🔍 Verifying against GitHub's recorded blob hash..."
+    local EXPECTED_SHA ACTUAL_SHA
+    EXPECTED_SHA=$(curl -fsSL -H "Accept: application/vnd.github+json" "$API_URL" 2>/dev/null |
+        grep -o '"sha"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 |
+        sed -E 's/.*"sha"[[:space:]]*:[[:space:]]*"([^"]*)"/\1/')
+
+    if [ -n "$EXPECTED_SHA" ]; then
+        ACTUAL_SHA=$({
+            printf 'blob %s\0' "$(wc -c <"$TMP_FILE")"
+            cat "$TMP_FILE"
+        } | sha1sum | awk '{print $1}')
+        if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+            echo "❌ Update aborted: checksum mismatch."
+            echo "   expected: $EXPECTED_SHA"
+            echo "   got:      $ACTUAL_SHA"
+            rm -f "$TMP_FILE"
+            return 1
+        fi
+        echo "✅ Checksum verified against GitHub API."
+    else
+        echo "⚠️  Could not fetch expected checksum from the GitHub API (rate-limited or offline?)."
+        read -p "   Continue anyway without checksum verification? (y/N): " force_continue
+        if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
+            echo "Aborted. No changes made."
+            rm -f "$TMP_FILE"
+            return 1
+        fi
+    fi
+
+    # 4. Show exactly what's changing before committing to it.
+    echo ""
+    echo "📋 Changes to be applied:"
+    diff -u "$0" "$TMP_FILE" || true
+    echo ""
+    read -p "Apply this update? (y/N): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Aborted. No changes made."
+        rm -f "$TMP_FILE"
+        return 0
+    fi
+
+    # 5. Keep a rollback copy before overwriting the running script.
+    cp "$0" "$0.bak"
+    echo "🗄️  Backed up current script to $0.bak"
+
+    mv "$TMP_FILE" "$0"
+    chmod +x "$0"
+    echo "✅ Successfully updated. Please re-run the script."
+    echo "   Roll back anytime with: cp $0.bak $0"
+    exit 0
 }
 
 # Function to list current cluster nodes

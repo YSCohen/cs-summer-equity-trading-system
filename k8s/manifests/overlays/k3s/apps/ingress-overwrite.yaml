@@ -24,20 +24,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: streamlit-ingress
-  annotations:
-    traefik.ingress.kubernetes.io/router.middlewares: null
-    traefik.ingress.kubernetes.io/affinity: null
-    traefik.ingress.kubernetes.io/session-cookie-name: null
 spec:
-  ingressClassName: tailscale
-  tls:
-    - hosts:
-        - ui
-  defaultBackend:
-    service:
-      name: error-pages-service
-      port:
-        number: 80
+  ingressClassName: traefik
   rules:
     - host: ui
       http:

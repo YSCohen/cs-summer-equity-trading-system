@@ -1,3 +1,5 @@
+.PHONY: chaos-kill chaos restore-all chaos-node-stop chaos-node-start chaos-kill-redis
+
 # ==========================================
 # 🌪️ CHAOS ENGINEERING (SCALE & KILL)
 # ==========================================
@@ -29,7 +31,7 @@ chaos-kill: ## 💀 Interactive menu to delete pods for a specific app
 				*) echo "app=$$app";; \
 			esac); \
 			echo "💀 Killing pods for $$app (Label: $$label) in namespace $$ns..."; \
-			$(DOCKER) exec -it k8s-toolbox kubectl delete pods -l "$$label" -n "$$ns"; \
+			$(DOCKER) exec k8s-toolbox kubectl delete pods -l "$$label" -n "$$ns"; \
 			break; \
 		fi; \
 	done
@@ -57,12 +59,12 @@ chaos: ## 💥 Interactive menu to scale components down to 0
 						if [ "$$app" = "fastapi" ]; then deploy_name="fastapi-api"; scale_name="fastapi-scaler"; fi; \
 						if [ "$$app" = "trade-writer" ]; then scale_name="trade-writer-scaler"; fi; \
 						echo "⏸️  Suspending Flux 3-apps kustomization..."; \
-						$(DOCKER) exec -it k8s-toolbox flux suspend kustomization 3-apps; \
+						$(DOCKER) exec k8s-toolbox flux suspend kustomization 3-apps; \
 						echo "🔫 Scaling $$app down to 0 in namespace $$ns..."; \
 						if [ "$$app" = "fastapi" ] || [ "$$app" = "trade-writer" ]; then \
-							$(DOCKER) exec -it k8s-toolbox kubectl annotate scaledobject $$scale_name -n $$ns autoscaling.keda.sh/paused-replicas="0" --overwrite; \
+							$(DOCKER) exec k8s-toolbox kubectl annotate scaledobject $$scale_name -n $$ns autoscaling.keda.sh/paused-replicas="0" --overwrite; \
 						else \
-							$(DOCKER) exec -it k8s-toolbox kubectl scale deployment $$deploy_name -n $$ns --replicas=0; \
+							$(DOCKER) exec k8s-toolbox kubectl scale deployment $$deploy_name -n $$ns --replicas=0; \
 						fi; \
 						echo "=========================================================="; \
 						echo "⚠️  WARNING: Flux is SUSPENDED. The cluster is in CHAOS mode."; \
@@ -77,15 +79,15 @@ chaos: ## 💥 Interactive menu to scale components down to 0
 					if [ "$$data_app" = "Back" ]; then break; fi; \
 					if [ -n "$$data_app" ]; then \
 						echo "⏸️  Suspending Flux 2-data kustomization..."; \
-						$(DOCKER) exec -it k8s-toolbox flux suspend kustomization 2-data; \
+						$(DOCKER) exec k8s-toolbox flux suspend kustomization 2-data; \
 						echo "🔫 Scaling $$data_app down to 0 in namespace data..."; \
 						if [ "$$data_app" = "pgbouncer" ]; then \
-							$(DOCKER) exec -it k8s-toolbox kubectl scale deployment $$data_app -n data --replicas=0; \
+							$(DOCKER) exec k8s-toolbox kubectl scale deployment $$data_app -n data --replicas=0; \
 						elif [ "$$data_app" = "redis" ]; then \
-							REDIS_STS=$$($(DOCKER) exec -it k8s-toolbox kubectl get sts -n data -l 'app.kubernetes.io/name=redis' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "redis"); \
-							$(DOCKER) exec -it k8s-toolbox kubectl scale statefulset $$REDIS_STS -n data --replicas=0; \
+							REDIS_STS=$$($(DOCKER) exec k8s-toolbox kubectl get sts -n data -l 'app.kubernetes.io/name=redis' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "redis"); \
+							$(DOCKER) exec k8s-toolbox kubectl scale statefulset $$REDIS_STS -n data --replicas=0; \
 						else \
-							$(DOCKER) exec -it k8s-toolbox kubectl scale statefulset $$data_app -n data --replicas=0; \
+							$(DOCKER) exec k8s-toolbox kubectl scale statefulset $$data_app -n data --replicas=0; \
 						fi; \
 						echo "=========================================================="; \
 						echo "⚠️  WARNING: Flux is SUSPENDED. The cluster is in CHAOS mode."; \
@@ -103,23 +105,23 @@ chaos: ## 💥 Interactive menu to scale components down to 0
 # ------------------------------------------
 restore-all: ## 🚑 Resume Flux to naturally restore all chaos components
 	@echo "🚑 Removing any active KEDA pause annotations..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl annotate scaledobject fastapi-scaler -n backend autoscaling.keda.sh/paused-replicas- 2>/dev/null || true
-	@$(DOCKER) exec -it k8s-toolbox kubectl annotate scaledobject trade-writer-scaler -n backend autoscaling.keda.sh/paused-replicas- 2>/dev/null || true
+	@$(DOCKER) exec k8s-toolbox kubectl annotate scaledobject fastapi-scaler -n backend autoscaling.keda.sh/paused-replicas- 2>/dev/null || true
+	@$(DOCKER) exec k8s-toolbox kubectl annotate scaledobject trade-writer-scaler -n backend autoscaling.keda.sh/paused-replicas- 2>/dev/null || true
 	@echo "▶️  Resuming Flux reconciliations..."
-	@$(DOCKER) exec -it k8s-toolbox flux resume kustomization 2-data 2>/dev/null || true
-	@$(DOCKER) exec -it k8s-toolbox flux resume kustomization 3-apps 2>/dev/null || true
+	@$(DOCKER) exec k8s-toolbox flux resume kustomization 2-data 2>/dev/null || true
+	@$(DOCKER) exec k8s-toolbox flux resume kustomization 3-apps 2>/dev/null || true
 	@echo "🔄 Forcing a Flux sync to immediately recover replica counts..."
 	@$(MAKE) --no-print-directory sync LAYER=all
 	@echo "📦 Forcing HelmRelease reconciliations (to restore Redis/StatefulSets)..."
-	@$(DOCKER) exec -it k8s-toolbox flux reconcile helmrelease -n data --all 2>/dev/null || true
+	@$(DOCKER) exec k8s-toolbox flux reconcile helmrelease -n data --all 2>/dev/null || true
 
 chaos-node-stop: ## 🔥 Stopping the primary K3s node (Simulating Server Crash)
 	@echo "🔥 Stopping the primary K3s node (Simulating Server Crash)..."
-	@$(DOCKER) exec -it k8s-toolbox k3d node stop k3d-dev-cluster-server-0
+	@$(DOCKER) exec k8s-toolbox k3d node stop k3d-dev-cluster-server-0
 
 chaos-node-start: ## 🚑 Rebooting the primary K3s node
 	@echo "🚑 Rebooting the primary K3s node..."
-	@$(DOCKER) exec -it k8s-toolbox k3d node start k3d-dev-cluster-server-0
+	@$(DOCKER) exec k8s-toolbox k3d node start k3d-dev-cluster-server-0
 
 # ------------------------------------------
 # ⚡ RANDOM REDIS KILL (Sentinel Testing)
@@ -127,7 +129,7 @@ chaos-node-start: ## 🚑 Rebooting the primary K3s node
 
 chaos-kill-redis: ## ⚡ Randomly kill one Redis Sentinel pod
 	@echo "🎲 Selecting a random Redis pod to disrupt..."
-	@$(DOCKER) exec -it k8s-toolbox /bin/bash -c \
+	@$(DOCKER) exec k8s-toolbox /bin/bash -c \
 	"POD=\$$(kubectl get pods -n data -l app.kubernetes.io/name=redis -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | shuf -n 1); \
 	echo '💀 Killing \$$POD...'; \
 	kubectl delete pod \$$POD -n data"
