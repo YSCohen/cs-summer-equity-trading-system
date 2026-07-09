@@ -24,10 +24,24 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: streamlit-ingress
-  annotations:
-    traefik.ingress.kubernetes.io/router.middlewares: null
-    traefik.ingress.kubernetes.io/affinity: null
-    traefik.ingress.kubernetes.io/session-cookie-name: null
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ui
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: streamlit-svc
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tailscale-ui-entry
 spec:
   ingressClassName: tailscale
   tls:
@@ -41,7 +55,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: streamlit-svc
+                name: traefik-bridge # Funnels the 'ui' traffic into Traefik
                 port:
                   number: 80
 ---
