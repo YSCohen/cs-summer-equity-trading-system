@@ -46,8 +46,8 @@ pub async fn connect_postgres(config: &str) -> Client {
         Err(e) => fatal("failed to connect to postgres", e).await,
     };
     tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            error!(?e, "postgres connection driver error");
+        if let Err(err) = connection.await {
+            error!(?err, "postgres connection driver error");
         }
     });
     debug!("connected to postgres");
@@ -157,7 +157,6 @@ pub async fn fetch_sp500_symbols() -> Result<Vec<String>> {
         trace!(symbol = %formatted_symbol, "parsed symbol");
         symbols.push(formatted_symbol);
     }
-    debug!("parsed {} symbols from S&P 500 csv", symbols.len());
 
     Ok(symbols)
 }

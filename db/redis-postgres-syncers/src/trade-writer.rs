@@ -199,8 +199,8 @@ async fn reclaim_abandoned(
             .await
         {
             Ok(r) => r,
-            Err(e) => {
-                error!(?e, "failed to XAUTOCLAIM abandoned messages");
+            Err(err) => {
+                error!(?err, "failed to XAUTOCLAIM abandoned messages");
                 return;
             }
         };
@@ -253,9 +253,9 @@ async fn process_batch(
             "Decoded no valid rows, ACK+trimming {} bad messages to discard them.",
             msg_ids.len()
         );
-        if let Err(e) = ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await
+        if let Err(err) = ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await
         {
-            error!(?e, "Failed to ACK and trim bad messages in Redis");
+            error!(?err, "Failed to ACK and trim bad messages in Redis");
         }
         return;
     }
@@ -273,15 +273,15 @@ async fn process_batch(
 
             match ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await {
                 Ok(()) => debug!("ACK+trimmed {} messages from redis stream", msg_ids.len()),
-                Err(e) => error!(
-                    ?e,
+                Err(err) => error!(
+                    ?err,
                     "Failed to ACK+trim {} messages from redis stream",
                     msg_ids.len()
                 ),
             }
         }
-        Err(e) => error!(
-            ?e,
+        Err(err) => error!(
+            ?err,
             "postgres write failed; leaving messages un-ACKed for retry"
         ),
     }
@@ -374,8 +374,8 @@ fn build_payload_buffer(copy_payload_buffer: &mut String, ids: &[StreamId]) -> V
 
         let trade: TradePayload = match rmp_serde::from_slice(bytes) {
             Ok(t) => t,
-            Err(e) => {
-                warn!(?e, "Failed to decode payload for {}", record.id);
+            Err(err) => {
+                warn!(?err, "Failed to decode payload for {}", record.id);
                 continue; // Skip badly serialized record
             }
         };
