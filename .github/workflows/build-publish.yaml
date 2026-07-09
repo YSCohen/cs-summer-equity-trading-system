@@ -9,6 +9,9 @@ on:
   push:
     branches: ["main"]
   workflow_dispatch:
+  slash_command:
+    name: build
+    events: [pull_request_comment]
 
 env:
   REGISTRY: ghcr.io
