@@ -36,21 +36,21 @@ async def logging_middleware(request: Request, call_next):
         raise
 
     except asyncpg.PostgresError as e:
-        logger.exception(f"PostgreSQL failure: {e}")
+        logger.error(f"PostgreSQL failure: {e}")
         return JSONResponse(
             status_code=503,
             content={"detail": "Database unavailable"},
         )
 
     except RedisError as e:
-        logger.exception(f"Redis failure: {e}")
+        logger.error(f"Redis failure: {e}")
         return JSONResponse(
             status_code=503,
             content={"detail": "Redis unavailable"},
         )
 
-    except Exception:
-        logger.exception("Unhandled exception")
+    except Exception as e:
+        logger.error(f"Unhandled exception: {e}")
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal server error"},

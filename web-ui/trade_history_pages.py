@@ -36,7 +36,10 @@ def _render_trades_table(result):
         st.error(result["message"])
         return
 
-    trades = result["data"]
+    data = result["data"]
+    # GET /trades now returns {"trades": [...], "next_cursor": {...} | None}
+    trades = data.get("trades", []) if isinstance(data, dict) else data
+
     if not trades:
         st.info("No trades found.")
         return
@@ -73,7 +76,7 @@ def _trades_by_account_fragment(account_id):
 
 def render_trades_by_account_page():
     st.header("📜 Trade History by Account")
-    st.caption("GET /trades/account/{account_id}")
+    st.caption("GET /trades?account_id={account_id}")
 
     account_id = account_select()
 
@@ -89,11 +92,13 @@ def _trades_by_ticker_fragment(ticker):
 
 def render_trades_by_ticker_page():
     st.header("📜 Trade History by Ticker")
-    st.caption("GET /trades/ticker/{ticker}")
+    st.caption("GET /trades?ticker={ticker}")
 
-    ticker = st.text_input("Ticker", "AAPL")
+    with st.form("trades_by_ticker_form"):
+        ticker = st.text_input("Ticker", "AAPL")
+        submitted = st.form_submit_button("Load Trades")
 
-    if st.button("Load Trades"):
+    if submitted:
         st.session_state.trades_by_ticker_query = ticker.upper()
 
     query = st.session_state.get("trades_by_ticker_query")
@@ -108,7 +113,7 @@ def _trades_by_account_and_ticker_fragment(account_id, ticker):
 
 def render_trades_by_account_and_ticker_page():
     st.header("📜 Trade History by Account & Ticker")
-    st.caption("GET /trades/account/{account_id}/ticker.{ticker}")
+    st.caption("GET /trades?account_id={account_id}&ticker={ticker}")
 
     account_id = account_select(key="trades_acct_ticker_select")
     ticker = st.text_input("Ticker", "AAPL")
@@ -124,22 +129,23 @@ def _trade_by_id_fragment(trade_id):
         st.error(result["message"])
         return
 
-    trades = result["data"]
-    if not trades:
+    trade = result["data"]
+    if not trade:
         st.info("No trade found with that ID.")
         return
 
-    for trade in trades:
-        _trade_card(trade)
+    _trade_card(trade)
 
 
 def render_trade_by_id_page():
     st.header("🔍 Look Up Trade by ID")
-    st.caption("GET /trades/{trade_id}")
+    st.caption("GET /trade/{trade_id}")
 
-    trade_id = st.text_input("Trade ID")
+    with st.form("trade_by_id_form"):
+        trade_id = st.text_input("Trade ID")
+        submitted = st.form_submit_button("Load Trade")
 
-    if st.button("Load Trade"):
+    if submitted:
         st.session_state.trade_by_id_query = trade_id
 
     query = st.session_state.get("trade_by_id_query")
@@ -149,26 +155,69 @@ def render_trade_by_id_page():
 
 def render_update_trade_page():
     st.header("✏️ Edit Trade")
-    st.caption("PUT /trades/{trade_id}")
-    st.caption("This endpoint doesn't exist in the backend yet -- showing mock data.")
+    st.caption("PATCH /edit_trade/{trade_id}")
 
-    trade_id = st.text_input("Trade ID")
-    symbol = st.text_input("New Symbol")
-    side = st.selectbox("New Side", ["BUY", "SELL"])
-    quantity = st.number_input("New Quantity", min_value=1)
-    price = st.number_input("New Price", min_value=0.01)
-
-    if st.button("Update Trade"):
-        data = {
-            "symbol": symbol.upper(),
-            "side": side,
-            "quantity": quantity,
-            "price": price,
-        }
-        result = update_trade(trade_id, data)
-        st.success(f"Trade `{result['trade_id']}` updated.")
-        updated = result["updated"]
-        st.caption(
-            f"**{updated['side']} {updated['quantity']} {updated['symbol']}** "
-            f"@ ${updated['price']}"
+    with st.form("load_trade_for_edit_form"):
+        trade_id_input = st.text_input(
+            "Trade ID", value=st.session_state.get("editing_trade_id", "")
         )
+        load_clicked = st.form_submit_button("Load Trade")
+
+    if load_clicked:
+        result = get_trade_by_id(trade_id_input)
+        if result["status"] == "success" and result["data"]:
+            st.session_state.editing_trade_id = trade_id_input
+            st.session_state.editing_trade_data = result["data"]
+        else:
+            st.session_state.editing_trade_data = None
+            st.error(result.get("message", "Trade not found."))
+
+    loaded = st.session_state.get("editing_trade_data")
+    if not loaded:
+        return
+
+    st.divider()
+    st.caption(f"Editing trade `{st.session_state.editing_trade_id}`")
+
+    with st.form("update_trade_form"):
+        account_id = account_select(
+            preselect_account_id=loaded.get("account_id"),
+            key="update_trade_account_select",
+        )
+        ticker = st.text_input("Ticker", value=loaded.get("symbol_ticker", ""))
+        direction_is_sell = st.toggle(
+            "Sell (off = Buy)", value=(loaded.get("direction") == "Sell")
+        )
+        direction = "Sell" if direction_is_sell else "Buy"
+        st.caption(f"Direction: **{direction}**")
+        quantity = st.number_input(
+            "Quantity", min_value=1, step=1, value=int(loaded.get("quantity", 1))
+        )
+        price = st.number_input(
+            "Price", min_value=0.01, value=float(loaded.get("price", 0.01))
+        )
+        other_account = st.text_input(
+            "Other Account (optional)", value=loaded.get("other_account") or ""
+        )
+        submitted = st.form_submit_button("Update Trade")
+
+    if submitted:
+        if not account_id or not ticker:
+            st.error("Account and Ticker are required.")
+            return
+
+        payload = {
+            "account_id": account_id,
+            "ticker": ticker.upper(),
+            "direction": direction,
+            "quantity": int(quantity),
+            "price": str(price),
+            "other_account": other_account or None,
+        }
+        result = update_trade(st.session_state.editing_trade_id, payload)
+
+        if result["status"] == "success":
+            st.success(f"Trade `{st.session_state.editing_trade_id}` updated successfully.")
+            st.session_state.editing_trade_data = None
+        else:
+            st.error(result["message"])

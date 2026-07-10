@@ -85,9 +85,22 @@ def _render_review_step():
 
 
 def _render_post_submission_state():
+    """NOTE: the backend now processes every trade in the batch
+    regardless of earlier failures, and always returns HTTP 200 -- so
+    result["status"] == "success" only means the request went through,
+    not that every trade booked. We read data["successes"]/
+    data["failures"] to know what actually happened."""
     payload, data = st.session_state.last_submission_result
-    st.success(f"All {len(payload)} trades submitted successfully.")
-    _render_submission_results(payload, data)
+
+    successes = data.get("successes", []) if isinstance(data, dict) else []
+    failures = data.get("failures", []) if isinstance(data, dict) else []
+
+    if failures:
+        st.warning(f"{len(successes)} of {len(payload)} trades booked. {len(failures)} failed:")
+    else:
+        st.success(f"All {len(successes)} trades submitted successfully.")
+
+    _render_submission_results(successes, failures)
 
     st.divider()
     if st.button("➕ Book More Trades", type="primary"):
@@ -97,25 +110,30 @@ def _render_post_submission_state():
         st.rerun()
 
 
-def _render_submission_results(payload, data):
-    """Shows which trade got which trade_id, in plain readable text
-    instead of raw JSON."""
-    messages = data.get("message", []) if isinstance(data, dict) else []
+def _render_submission_results(successes, failures):
+    """Shows which trades booked and which failed and why.
 
-    for trade, entry in zip(payload, messages):
-        status_text = entry.get("status", "") if isinstance(entry, dict) else str(entry)
-        # Backend currently returns "success, here is your trade_id <uuid>"
-        trade_id = status_text.split("trade_id")[-1].strip() if "trade_id" in status_text else None
-
+    NOTE: successes currently only carry a trade_id -- the backend
+    doesn't echo back which account/ticker each one was for, unlike
+    failures, whose reason text already names the account/ticker (see
+    trade_services.py's error messages). Worth asking for that same
+    context on successes too, for a fully readable audit trail here.
+    """
+    for entry in successes:
+        trade_id = entry.get("trade_id") if isinstance(entry, dict) else None
         with st.container(border=True):
-            st.markdown(
-                f"✅ **{trade['direction']} {trade['quantity']} {trade['ticker']}** "
-                f"on account `{trade['account_id']}`"
-            )
+            st.markdown("✅ **Trade booked**")
             if trade_id:
                 st.caption(f"Trade ID: `{trade_id}`")
-            else:
-                st.caption(status_text)
+
+    for entry in failures:
+        reason = (
+            entry.get("Failure Reason", "Unknown error")
+            if isinstance(entry, dict)
+            else str(entry)
+        )
+        with st.container(border=True):
+            st.markdown(f"❌ {reason}")
 
 
 def _render_builder_step():

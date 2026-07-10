@@ -3,3 +3,22 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../base/infrastructure
+
+patches:
+  # Local laptop dev only (dev-will): the loki-stack chart's `prometheus.enabled: true`
+  # pulls in the full kube-prometheus subchart (Prometheus server, Alertmanager,
+  # kube-state-metrics, node-exporter DaemonSet) with no resource limits set anywhere.
+  # That's the biggest single contributor to CPU overcommit/heat on a local machine.
+  # Loki + Promtail + Grafana stay enabled so logs/dashboards still work.
+  - target:
+      kind: HelmRelease
+      name: loki-stack
+    patch: |-
+      apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      metadata:
+        name: loki-stack
+      spec:
+        values:
+          prometheus:
+            enabled: false

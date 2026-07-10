@@ -160,15 +160,38 @@ def _render_success_state():
     showing right before submit (so you can see exactly what was
     booked), with "Book More Trades" up top in place of the submit
     button. No submit control is rendered here, so there's no way to
-    re-book the same batch."""
+    re-book the same batch.
+
+    NOTE: the backend now processes every trade in the batch regardless
+    of earlier failures, and always returns HTTP 200 -- so we can't rely
+    on "the request succeeded" to mean "every trade succeeded." We have
+    to read data["successes"]/data["failures"] to know what really
+    happened.
+    """
     payload, data = st.session_state.mass_trade_last_result
     rows = st.session_state.get("mass_trade_last_rows", [])
+
+    successes = data.get("successes", []) if isinstance(data, dict) else []
+    failures = data.get("failures", []) if isinstance(data, dict) else []
 
     if st.button("📋 Book More Trades", type="primary"):
         _reset_mass_trade_state()
         st.rerun()
 
-    st.success(f"✅ {len(payload)} trades submitted successfully.")
+    if failures:
+        st.warning(
+            f"{len(successes)} of {len(payload)} trades booked. "
+            f"{len(failures)} failed:"
+        )
+        for entry in failures:
+            reason = (
+                entry.get("Failure Reason", "Unknown error")
+                if isinstance(entry, dict)
+                else str(entry)
+            )
+            st.error(reason)
+    else:
+        st.success(f"✅ {len(successes)} of {len(payload)} trades submitted successfully.")
 
     if rows:
         _render_preview_grid(rows)

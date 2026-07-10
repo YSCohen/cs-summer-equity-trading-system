@@ -18,14 +18,17 @@ def _get_session():
 def _api_error(response):
     if response.status_code == 401 and st.session_state.get("username"):
         from persistent_login import forget_login
-        st.session_state.username = None
-        st.session_state.pop("http", None)
-        st.session_state.pop("nav_page", None)
         forget_login()
 
         for key in ["remember_user", "remember_session"]:
             if key in st.query_params:
                 del st.query_params[key]
+
+        # Same reasoning as the explicit logout button in app_ui.py: a full
+        # clear (not just username/http/nav_page) so nothing this user
+        # booked/entered is still sitting in session_state for the next
+        # person who logs in on this tab.
+        st.session_state.clear()
 
         st.warning("Your session expired. Please log in again.")
         st.rerun()
@@ -209,8 +212,20 @@ def get_positions_by_account_and_ticker(account_id, ticker):
 
 def submit_trades(trades: list):
     """Send a list of trade dicts to POST /trade in a single request.
-    Each dict should have: account_id, user_id, ticker, direction,
-    quantity, price, and optionally other_account.
+    Each dict should have: account_id, ticker, direction, quantity,
+    price, and optionally other_account.
+
+    NOTE: the backend now processes every trade in the batch regardless
+    of earlier failures, and ALWAYS returns HTTP 200 -- it never raises,
+    it just reports outcomes. The response body looks like:
+        {
+            "message": "Trades processed. Successes: 3, Failures: 2",
+            "successes": [{"status": "success", "trade_id": "..."}, ...],
+            "failures": [{"Failure Reason": "..."}, ...],
+        }
+    Callers MUST check data["failures"] themselves -- result["status"]
+    being "success" here only means the HTTP request succeeded, NOT that
+    every (or any) trade in the batch actually booked.
     """
     session = _get_session()
     response = session.post(f"{API_BASE_URL}/trade", json=trades)
@@ -221,11 +236,35 @@ def submit_trades(trades: list):
         return {"status": "error", "message": _api_error(response)}
 
 
-# These don't have a real endpoint in main.py yet -- kept as mocks so the
-# UI doesn't break.
-def get_trades():
+def get_trades(
+    account_id=None,
+    ticker=None,
+    time_start=None,
+    time_end=None,
+    cursor_created_at=None,
+    cursor_trade_id=None,
+    limit=50,
+):
+    """Hits the real GET /trades endpoint (Postgres-backed, paginated).
+    Returns {"trades": [...], "next_cursor": {...} | None} as `data`.
+    All filters are optional; pass none for "all trades", first page.
+    """
     session = _get_session()
-    response = session.get(f"{API_BASE_URL}/trades")
+    params = {"limit": limit}
+    if account_id is not None:
+        params["account_id"] = account_id
+    if ticker is not None:
+        params["ticker"] = ticker
+    if time_start is not None:
+        params["time_start"] = time_start
+    if time_end is not None:
+        params["time_end"] = time_end
+    if cursor_created_at is not None:
+        params["cursor_created_at"] = cursor_created_at
+    if cursor_trade_id is not None:
+        params["cursor_trade_id"] = cursor_trade_id
+
+    response = session.get(f"{API_BASE_URL}/trades", params=params)
 
     if response.status_code == 200:
         return {"status": "success", "data": response.json()}
@@ -234,42 +273,26 @@ def get_trades():
 
 
 def get_trades_by_account(account_id):
-    session = _get_session()
-    response = session.get(f"{API_BASE_URL}/trades/account/{account_id}")
-
-    if response.status_code == 200:
-        return {"status": "success", "data": response.json()}
-    else:
-        return {"status": "error", "message": _api_error(response)}
+    """The per-filter routes were removed from the backend -- this is now
+    just GET /trades?account_id=... under the hood."""
+    return get_trades(account_id=account_id)
 
 
 def get_trades_by_ticker(ticker):
-    session = _get_session()
-    response = session.get(f"{API_BASE_URL}/trades/ticker/{ticker}")
-
-    if response.status_code == 200:
-        return {"status": "success", "data": response.json()}
-    else:
-        return {"status": "error", "message": _api_error(response)}
+    """Now just GET /trades?ticker=... under the hood."""
+    return get_trades(ticker=ticker)
 
 
 def get_trades_by_account_and_ticker(account_id, ticker):
-    session = _get_session()
-    # NOTE: backend route uses a "." before {ticker}, not "/" -- confirm
-    # with your teammate whether this is intentional.
-    response = session.get(
-        f"{API_BASE_URL}/trades/account/{account_id}/ticker/{ticker}"
-    )
-
-    if response.status_code == 200:
-        return {"status": "success", "data": response.json()}
-    else:
-        return {"status": "error", "message": _api_error(response)}
+    """Now just GET /trades?account_id=...&ticker=... under the hood."""
+    return get_trades(account_id=account_id, ticker=ticker)
 
 
 def get_trade_by_id(trade_id):
+    """NOTE: route is singular -- GET /trade/{trade_id}, not /trades/.
+    Returns a single trade dict directly as `data`, not a list."""
     session = _get_session()
-    response = session.get(f"{API_BASE_URL}/trades/{trade_id}")
+    response = session.get(f"{API_BASE_URL}/trade/{trade_id}")
 
     if response.status_code == 200:
         return {"status": "success", "data": response.json()}
@@ -277,13 +300,18 @@ def get_trade_by_id(trade_id):
         return {"status": "error", "message": _api_error(response)}
 
 
-# No real endpoint for this yet -- kept as a mock.
 def update_trade(trade_id, data):
-    return {
-        "status": "success",
-        "trade_id": trade_id,
-        "updated": data,
-    }
+    """Now a real endpoint: PATCH /edit_trade/{trade_id}. `data` must
+    match the Trade model shape used for booking: account_id, ticker,
+    direction ('Buy'/'Sell'), quantity, price, and optionally
+    other_account."""
+    session = _get_session()
+    response = session.patch(f"{API_BASE_URL}/edit_trade/{trade_id}", json=data)
+
+    if response.status_code == 200:
+        return {"status": "success", "data": response.json()}
+    else:
+        return {"status": "error", "message": _api_error(response)}
 
 
 # --- Accounts ---------------------------------------------------------
@@ -294,7 +322,6 @@ def create_account(name, can_short):
         f"{API_BASE_URL}/users/account",
         params={"account_name": name, "can_short": can_short},
     )
-
 
     if response.status_code == 200:
         data = response.json()

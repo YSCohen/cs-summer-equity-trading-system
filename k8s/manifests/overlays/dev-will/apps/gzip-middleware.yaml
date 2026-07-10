@@ -1,0 +1,18 @@
+---
+# Local laptop dev only (dev-will). The streamlit-aggrid component ships a
+# single ~4.6MB uncompressed JS bundle (verified by downloading the exact
+# locked wheel, streamlit_aggrid==1.2.1.post2, and inspecting
+# st_aggrid/frontend/build/static/js/ -- no .gz/.br precompressed variant
+# exists, and nothing in the current ingress chain compresses it either).
+# Fetching that much uncompressed JS through browser -> Traefik -> Service
+# -> pod on every fresh component mount is a plausible contributor to the
+# "trouble loading the component" failures, independent of CPU/memory.
+# This adds gzip compression at the Traefik layer so text assets (JS/CSS)
+# get compressed in transit.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: gzip-compress
+  namespace: networking
+spec:
+  compress: {}

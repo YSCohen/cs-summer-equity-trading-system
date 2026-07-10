@@ -23,6 +23,12 @@ def render_login_page():
     if submitted:
         result = login(username, password)
         if result["status"] == "success":
+            # Defensive: clear any leftover state from a previous user on
+            # this same browser tab (belt-and-suspenders alongside the
+            # clears in the logout button and the 401 auto-logout path --
+            # see app_ui.py / api_client.py) before setting the new
+            # session's username, so we never render stale trade data.
+            st.session_state.clear()
             st.session_state.username = username
             st.session_state.saved_session_cookie = result["session_cookie"]
             st.query_params["remember_user"] = username
@@ -46,6 +52,8 @@ def render_register_page():
             # straight into the main app instead of back at the login page.
             login_result = login(username, password)
             if login_result["status"] == "success":
+                # Same defensive clear as render_login_page() -- see there.
+                st.session_state.clear()
                 st.session_state.username = username
                 remember_login(username, login_result["session_cookie"])
                 st.success(f"Account created for {result['username']}. Logging you in...")

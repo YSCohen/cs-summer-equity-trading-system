@@ -89,6 +89,13 @@ def render_positions_grid(rows, empty_message="No positions found.", key="positi
         gridOptions=grid_options,
         fit_columns_on_grid_load=True,
         update_mode=GridUpdateMode.NO_UPDATE,
+        # Without this, every 6s auto-refresh (st.fragment run_every) makes
+        # AgGrid tear down and rebuild its whole client-side grid/JS state
+        # from scratch instead of just patching in new rows -- that's what
+        # was racing against the refresh interval and causing the "trouble
+        # loading the component" failures. reload_data=False keeps the grid
+        # instance alive across reruns and only updates its data in place.
+        reload_data=False,
         key=key,
     )
 

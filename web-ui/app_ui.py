@@ -59,13 +59,17 @@ else:
     if st.sidebar.button("🚪 Log Out"):
         logout()
         forget_login()
-        st.session_state.username = None
-        st.session_state.pop("saved_session_cookie", None)
-        st.session_state.pop("http", None)
 
         for key in ["remember_user", "remember_session"]:
             if key in st.query_params:
                 del st.query_params[key]
+
+        # Full clear, not just username/cookie/http -- session_state is
+        # tied to the browser tab, not the logged-in user. Without this,
+        # anything left over from this user (mass_trade_submitted,
+        # mass_trade_last_result, last_submission_result, editing_*, etc.)
+        # is still sitting there for whoever logs in next on this same tab.
+        st.session_state.clear()
 
         st.rerun()
 

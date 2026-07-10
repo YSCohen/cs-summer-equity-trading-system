@@ -17,6 +17,15 @@ from app.services.position_services import edit_position
 router = APIRouter(tags=["Trades"])
 
 
+@router.get("/tickers")
+async def get_tickers(user_id: str = Depends(verify_cookie)):
+    logger.info("Received request for valid tickers")
+
+    from app.services.ticker_service import valid_tickers
+
+    return {"valid_tickers": list(valid_tickers)}
+
+
 @router.post("/trade")
 async def create_trade(trade: list[Trade], user_id: str = Depends(verify_cookie)):
     logger.info("Recieved request to book trade data")
@@ -34,7 +43,7 @@ async def create_trade(trade: list[Trade], user_id: str = Depends(verify_cookie)
                 await individual_trade(user_id, trade_item.model_dump())
             )  # Converts from class to dictionary for sorting
         except HTTPException as e:
-            logger.error(f"Trade failed: {e.detail}")
+            logger.warning(f"Trade failed: {e.detail}")
             trade_failures.append({"Failure Reason": e.detail})
 
     return {
