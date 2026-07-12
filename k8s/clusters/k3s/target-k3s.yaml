@@ -21,6 +21,7 @@ spec:
   dependsOn:
     - name: 1-infra
   interval: 5m
+  retryInterval: 30s   
   path: ./k8s/manifests/overlays/k3s/data-layer 
   prune: true
   sourceRef:

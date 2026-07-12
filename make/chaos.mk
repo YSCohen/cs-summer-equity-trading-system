@@ -5,8 +5,8 @@
 # ==========================================
 SHELL := /bin/bash
 SCALE_APPS_BANK = fastapi streamlit locust adminer db-syncer trade-writer price-cacher
-SCALE_DATA_BANK = redis postgres pgbouncer
-KILL_BANK = fastapi streamlit locust adminer db-syncer trade-writer price-cacher redis grafana
+SCALE_DATA_BANK = redis trading-db trading-pooler
+KILL_BANK = fastapi streamlit locust adminer db-syncer trade-writer price-cacher redis trading-db grafana
 
 # ------------------------------------------
 # 💀 KILL (Simulate Pod Crash)
@@ -23,11 +23,13 @@ chaos-kill: ## 💀 Interactive menu to delete pods for a specific app
 				grafana) echo "monitoring";; \
 				locust) echo "load-testing";; \
 				streamlit) echo "frontend";; \
-				adminer|redis|postgres|pgbouncer) echo "data";; \
+				adminer|redis|trading-db|trading-pooler) echo "data";; \
 				*) echo "backend";; \
 			esac); \
 			label=$$(case $$app in \
 				grafana) echo "app.kubernetes.io/name=grafana";; \
+				trading-db) echo "cnpg.io/cluster=trading-db";; \
+				trading-pooler) echo "cnpg.io/poolerName=trading-pooler";; \
 				*) echo "app=$$app";; \
 			esac); \
 			echo "💀 Killing pods for $$app (Label: $$label) in namespace $$ns..."; \
@@ -81,8 +83,10 @@ chaos: ## 💥 Interactive menu to scale components down to 0
 						echo "⏸️  Suspending Flux 2-data kustomization..."; \
 						$(DOCKER) exec k8s-toolbox flux suspend kustomization 2-data; \
 						echo "🔫 Scaling $$data_app down to 0 in namespace data..."; \
-						if [ "$$data_app" = "pgbouncer" ]; then \
-							$(DOCKER) exec k8s-toolbox kubectl scale deployment $$data_app -n data --replicas=0; \
+						if [ "$$data_app" = "trading-pooler" ]; then \
+							$(DOCKER) exec k8s-toolbox kubectl scale deployment trading-pooler -n data --replicas=0; \
+						elif [ "$$data_app" = "trading-db" ]; then \
+							$(DOCKER) exec k8s-toolbox kubectl patch cluster trading-db -n data --type merge -p '{"spec":{"instances":0}}'; \
 						elif [ "$$data_app" = "redis" ]; then \
 							REDIS_STS=$$($(DOCKER) exec k8s-toolbox kubectl get sts -n data -l 'app.kubernetes.io/name=redis' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "redis"); \
 							$(DOCKER) exec k8s-toolbox kubectl scale statefulset $$REDIS_STS -n data --replicas=0; \

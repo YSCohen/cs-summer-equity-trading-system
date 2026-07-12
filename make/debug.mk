@@ -1,4 +1,4 @@
-.PHONY: bounce-api shell run kubectl shell-api shell-ui shell-postgres psql redis-cli redis-sentinel
+.PHONY: bounce-api shell run kubectl shell-api shell-ui shell-postgres psql redis-cli redis-sentinel shell-pooler
 
 ## ==========================================
 # 🕵️ DOWNWARD API & ENV DEBUGGING
@@ -29,13 +29,17 @@ shell-ui: ## 🔌 Connecting to Streamlit frontend...
 	@echo "🔌 Connecting to Streamlit frontend..."
 	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it deployment/streamlit -n frontend -- /bin/sh
 
-shell-postgres: ## 🔌 Connecting to Postgres container...
-	@echo "🔌 Connecting to Postgres container..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it statefulset/postgres -n data -- /bin/sh
+shell-postgres: ## 🔌 Connecting to CNPG primary Postgres container...
+	@echo "🔌 Connecting to CNPG primary..."
+	@$(DOCKER) exec -it k8s-toolbox bash -c 'POD=$$(kubectl get pods -n data -l "cnpg.io/cluster=trading-db,cnpg.io/instanceRole=primary" -o jsonpath="{.items[0].metadata.name}"); kubectl exec -it $$POD -n data -- /bin/bash'
 
 psql: ## 🐘 Starting interactive PostgreSQL session...
 	@echo "🐘 Starting interactive PostgreSQL session..."
-	@$(DOCKER) exec -it k8s-toolbox kubectl exec -it statefulset/postgres -n data -- psql -U trade_admin -d trading
+	@$(DOCKER) exec -it k8s-toolbox bash -c 'POD=$$(kubectl get pods -n data -l "cnpg.io/cluster=trading-db,cnpg.io/instanceRole=primary" -o jsonpath="{.items[0].metadata.name}"); kubectl exec -it $$POD -n data -- psql -U trade_admin -d trading'
+
+shell-pooler: ## 🔌 Connecting to PgBouncer pooler container...
+	@echo "🔌 Connecting to PgBouncer pooler..."
+	@$(DOCKER) exec -it k8s-toolbox bash -c 'POD=$$(kubectl get pods -n data -l "cnpg.io/poolerName=trading-pooler" -o jsonpath="{.items[0].metadata.name}"); kubectl exec -it $$POD -n data -- /bin/bash'
 
 redis-cli: ## 🔴 Connecting to Redis CLI dynamically...
 	@echo "🔴 Finding active Redis node and launching CLI..."

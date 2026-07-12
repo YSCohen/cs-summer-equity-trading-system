@@ -10,7 +10,7 @@ data:
     // Adminer adds the username to the GET parameters after successful login.
     if (!isset($_GET['username'])) {
         $_POST['auth']['driver'] = 'pgsql';
-        $_POST['auth']['server'] = 'postgres.data.svc.cluster.local';
+        $_POST['auth']['server'] = getenv('PG_RO_HOST');
         $_POST['auth']['username'] = getenv('POSTGRES_USER');
         $_POST['auth']['password'] = getenv('POSTGRES_PASSWORD');
         $_POST['auth']['db'] = 'trading';

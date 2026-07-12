@@ -1,0 +1,48 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: trading-db
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:17-minimal-trixie
+
+  inheritedMetadata:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9187"
+      prometheus.io/path: "/metrics"
+
+  # Ensures replicas are never scheduled on the same host in K3s
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: required
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+  postgresql:
+    parameters:
+      max_connections: "200" # Increased to support Session pooling
+      shared_buffers: "128MB"
+      log_checkpoints: "off"
+      log_statement: "mod"
+
+  storage:
+    size: 3Gi
+    storageClass: local-path
+
+  bootstrap:
+    initdb:
+      database: trading
+      owner: trade_admin
+      postInitApplicationSQLRefs:
+        configMapRefs:
+          - name: postgres-init-schema
+            key: 01-schema.sql

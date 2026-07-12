@@ -80,3 +80,7 @@ CREATE UNLOGGED TABLE users_sync_stage (
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );
+
+-- Ensure trade_admin has full access (CNPG does not make the app user a superuser)
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO trade_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO trade_admin;

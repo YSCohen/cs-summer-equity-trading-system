@@ -1,0 +1,29 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: trading-pooler-ro
+spec:
+  cluster:
+    name: trading-db
+  instances: 1
+  type: ro
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      max_client_conn: "2000"
+      default_pool_size: "60"
+  template:
+    spec:
+      containers: []
+      initContainers:
+        - name: wait-for-replica
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z trading-db-ro.data.svc.cluster.local 5432; do
+                echo "No ready replica yet. Sleeping 2 seconds..."
+                sleep 2
+              done

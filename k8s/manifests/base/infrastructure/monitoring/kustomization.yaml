@@ -21,4 +21,4 @@ configMapGenerator:
       labels:
         grafana_dashboard: "1"
       annotations:
-        k8s-sidecar-target-directory: "Custom_Dashboards"
+        k8s-sidecar-target-directory: ""

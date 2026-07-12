@@ -8,15 +8,21 @@ spec:
   chart:
     spec:
       chart: redis
-      version: "18.x.x" 
+      version: "18.x.x"
       sourceRef:
         kind: HelmRepository
         name: bitnami
   values:
     architecture: replication
     auth:
-      enabled: false 
-    
+      enabled: false
+    metrics:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: bitnami/redis-exporter
+        tag: "latest"
+
     commonConfiguration: |-
       appendonly yes
       appendfsync everysec
