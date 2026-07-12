@@ -5,7 +5,7 @@ metadata:
   name: trading-db
 spec:
   instances: 3
-  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  imageName: ghcr.io/cloudnative-pg/postgresql:17-minimal-trixie
 
   inheritedMetadata:
     annotations:
@@ -42,8 +42,6 @@ spec:
     initdb:
       database: trading
       owner: trade_admin
-      secret:
-        name: db-credentials
       postInitApplicationSQLRefs:
         configMapRefs:
           - name: postgres-init-schema

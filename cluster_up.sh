@@ -178,46 +178,6 @@ done
 echo "✅ API server is ready."
 
 # ============================================================
-# Create Postgres Password
-# ============================================================
-
-echo "🔐 Generating db-credentials secret..."
-
-# Pre-create the namespaces that need the secret before Flux runs
-for NS in data backend secrets; do
-    $ENGINE exec -i k8s-toolbox kubectl create namespace "$NS" \
-        --dry-run=client -o yaml |
-        $ENGINE exec -i k8s-toolbox kubectl apply -f -
-done
-
-# Generate once, apply to all consumer namespaces
-PG_PASS=$(openssl rand -base64 24 | tr -d '=+/' | cut -c1-24)
-for NS in data backend; do
-    $ENGINE exec -i k8s-toolbox kubectl create secret generic db-credentials \
-        --from-literal=username=trade_admin \
-        --from-literal=password="$PG_PASS" \
-        --from-literal=POSTGRES_USER=trade_admin \
-        --from-literal=POSTGRES_PASSWORD="$PG_PASS" \
-        --namespace="$NS" \
-        --dry-run=client -o yaml |
-        $ENGINE exec -i k8s-toolbox kubectl apply -f -
-done
-echo "✅ db-credentials created in data and backend namespaces."
-
-# Pre-create the CNPG app secret so the operator finds it on first
-# reconciliation and adopts it instead of generating a new password.
-$ENGINE exec -i k8s-toolbox kubectl create secret generic trading-db-app \
-    --from-literal=username=trade_admin \
-    --from-literal=password="$PG_PASS" \
-    --from-literal=dbname=trading \
-    --from-literal=host=trading-db-rw.data.svc.cluster.local \
-    --from-literal=port=5432 \
-    --namespace=data \
-    --dry-run=client -o yaml |
-    $ENGINE exec -i k8s-toolbox kubectl apply -f -
-echo "✅ trading-db-app pre-created in data namespace (prevents CNPG password drift)."
-
-# ============================================================
 # Bootstrapping Flux (Pure IaC)
 # ============================================================
 echo "📦 Bootstrapping Flux Controllers (Declarative Kustomize)..."
@@ -260,5 +220,5 @@ echo " 🐘 Adminer Database  -> http://adminer.localhost:8080"
 echo " "
 echo " 🔐 Default System Credentials:"
 echo "    Grafana UI -> User: admin | Pass: Rust!"
-echo "    PostgreSQL -> User: trade_admin | Pass: $PG_PASS"
+echo "    PostgreSQL -> Run 'make adminer-info' to fetch auto-generated credentials"
 echo "📈 ======================================================= 📈"

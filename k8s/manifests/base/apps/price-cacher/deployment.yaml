@@ -17,18 +17,18 @@ spec:
     spec:
       initContainers:
         - name: wait-for-loki
-          image: busybox:1.36
+          image: redis:8-alpine
           command:
             - sh
             - -c
             - |
-              echo "{\"message\":\"Waiting for Loki to become reachable...\"}"
+              echo "{\"message\":\"Waiting for Loki and Redis...\"}"
               until nc -z loki-stack.monitoring.svc.cluster.local 3100 && \
-                    nc -z redis-proxy.data.svc.cluster.local 6379; do
-                echo "{\"message\":\"Loki not ready. Sleeping 2 seconds...\"}"
+                    redis-cli -h redis-proxy.data.svc.cluster.local PING | grep -q PONG; do
+                echo "{\"message\":\"Infrastructure not ready. Sleeping 2 seconds...\"}"
                 sleep 2
               done
-              echo "{\"message\":\"Loki is online! Proceeding with price-cacher startup.\"}"
+              echo "{\"message\":\"Infrastructure is online! Proceeding with price-cacher startup.\"}"
       containers:
         - name: price-cacher
           image: price-cacher-image

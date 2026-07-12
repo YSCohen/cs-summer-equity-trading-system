@@ -5,6 +5,9 @@ metadata:
   name: keda
 spec:
   interval: 10m
+  # dependsOn:
+  #   - name: loki-stack
+  #     namespace: monitoring
   targetNamespace: keda
   chart:
     spec:

@@ -5,8 +5,6 @@ resources:
   - redis
   - redis-proxy
   - cnpg
-  # - postgres
-  # - pgbouncer
 
 configMapGenerator:
   - name: db-routing

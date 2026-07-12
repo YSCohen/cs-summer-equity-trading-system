@@ -5,6 +5,9 @@ metadata:
   name: cnpg
 spec:
   interval: 1h
+  # dependsOn:
+  #   - name: loki-stack
+  #     namespace: monitoring
   chart:
     spec:
       chart: cloudnative-pg
