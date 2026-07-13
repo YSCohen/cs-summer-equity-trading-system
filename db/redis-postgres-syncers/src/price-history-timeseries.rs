@@ -68,35 +68,27 @@ async fn run() -> Result<()> {
 
     let mut redis_conn = helpers::connect_redis(redis_url).await;
 
-    let symbols = match helpers::fetch_sp500_symbols().await {
-        Ok(symbols) => symbols,
-        Err(err) => helpers::fatal("could not fetch S&P 500 symbol list", err).await,
-    };
+    let symbols = helpers::fetch_sp500_symbols()
+        .await
+        .context("could not fetch S&P 500 symbol list")?;
 
-    info!("fetched {} S&P 500 symbols", symbols.len());
-
-    // Provision the raw series + compaction rules once. This is idempotent:
-    // already-provisioned symbols are skipped.
     info!(
         "ensuring time series and compaction rules for {} symbols",
         symbols.len()
     );
     for symbol in &symbols {
-        if let Err(err) = ensure_series(&mut redis_conn, symbol).await {
-            helpers::fatal(
-                &format!("failed to provision time series for {symbol}"),
-                err,
-            )
-            .await;
-        }
+        // already-provisioned symbols are skipped by ensure_series
+        ensure_series(&mut redis_conn, symbol)
+            .await
+            .with_context(|| format!("failed to provision time series for {symbol}"))?;
     }
     debug!("ensured {} time series", symbols.len());
 
     loop {
-        match append_all_latest_samples(&mut redis_conn, &symbols).await {
-            Ok(appended) => info!("appended {appended} latest samples"),
-            Err(err) => helpers::fatal("failed to append latest samples to redis", err).await,
-        }
+        let appended = append_all_latest_samples(&mut redis_conn, &symbols)
+            .await
+            .context("failed to append latest samples to redis")?;
+        info!("appended {appended} latest samples");
 
         debug!(interval, "sleeping until next append cycle");
         tokio::select! {

@@ -120,12 +120,7 @@ async fn run() -> Result<()> {
         // Select between waiting for Redis stream entries or a shutdown signal:
         let reply: StreamReadReply = tokio::select! {
             res = redis_conn.xread_options(&stream_name_arr, &new_message_id, &opts) => {
-                match res {
-                    Ok(r) => r,
-                    Err(e) => {
-                        helpers::fatal("Redis stream read failed", e).await
-                    }
-                }
+                res.context("Redis stream read failed")?
             }
             () = helpers::shutdown_signal() => {
                 info!("Shutdown signal received");
@@ -253,7 +248,8 @@ async fn process_batch(
             "Decoded no valid rows, ACK+trimming {} bad messages to discard them.",
             msg_ids.len()
         );
-        if let Err(err) = ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await
+        if let Err(err) =
+            ack_and_trim_stream(redis_conn, stream_name, consumer_group, &msg_ids).await
         {
             error!(?err, "Failed to ACK and trim bad messages in Redis");
         }
@@ -291,10 +287,7 @@ async fn process_batch(
 ///
 /// Used for fresh messages, which are not expected to collide. Returns `Err`
 /// on failure so the caller knows not to ACK.
-async fn copy_direct(
-    pg_client: &tokio_postgres::Client,
-    copy_payload_buffer: &str,
-) -> Result<()> {
+async fn copy_direct(pg_client: &tokio_postgres::Client, copy_payload_buffer: &str) -> Result<()> {
     let sink = pg_client
         .copy_in(DIRECT_COPY_QUERY)
         .await
