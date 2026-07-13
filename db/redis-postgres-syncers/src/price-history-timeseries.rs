@@ -4,13 +4,12 @@
 //! compaction rules. Every tier carries its own retention, so history
 //! automatically decays into progressively coarser buckets as it ages:
 //!
-//!   price:{SYM}       raw 1m samples, kept 1 hour
-//!   price:{SYM}:1h    hourly bars,    kept 1 day
-//!   price:{SYM}:1d    daily bars,     kept 1 month
-//!   price:{SYM}:1w    weekly bars,    kept 1 year
+//!   price:{SYM}       raw 1m samples, kept 1 day
+//!   price:{SYM}:1h    hourly bars,    kept 1 week
+//!   price:{SYM}:1d    daily bars,     kept 1 year
 //!
 //! The API can read a window at the appropriate resolution with TS.RANGE, e.g.
-//! `TS.RANGE price:AAPL:1d - +` for the last month of daily closes.
+//! `TS.RANGE price:AAPL:1d - +` for the last year of daily closes.
 
 use anyhow::{Context, Result};
 use dotenvy::dotenv;
@@ -18,8 +17,8 @@ use redis::aio::MultiplexedConnection;
 use tracing::{debug, info, trace, warn};
 use yahoo_finance_api as yahoo;
 
-/// Retention of the raw 1-minute source series (1 hour, in milliseconds).
-const RAW_RETENTION_MS: i64 = 60 * 60 * 1000;
+/// Retention of the raw 1-minute source series (1 day, in milliseconds).
+const RAW_RETENTION_MS: i64 = 24 * 60 * 60 * 1000;
 
 /// A compacted tier derived from the raw series: how wide each bucket is and
 /// how long the downsampled bars are kept before they expire.
@@ -30,22 +29,16 @@ struct Tier {
 }
 
 const TIERS: &[Tier] = &[
-    // hourly bars, kept for a day
+    // hourly bars, kept for a week
     Tier {
         suffix: "1h",
         bucket_ms: 60 * 60 * 1000,
-        retention_ms: 24 * 60 * 60 * 1000,
+        retention_ms: 7 * 24 * 60 * 60 * 1000,
     },
-    // daily bars, kept for a month
+    // daily bars, kept for a year
     Tier {
         suffix: "1d",
         bucket_ms: 24 * 60 * 60 * 1000,
-        retention_ms: 30 * 24 * 60 * 60 * 1000,
-    },
-    // weekly bars, kept for the rest of the year
-    Tier {
-        suffix: "1w",
-        bucket_ms: 7 * 24 * 60 * 60 * 1000,
         retention_ms: 365 * 24 * 60 * 60 * 1000,
     },
 ];

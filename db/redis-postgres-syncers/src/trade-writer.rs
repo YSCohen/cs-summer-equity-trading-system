@@ -92,13 +92,13 @@ async fn run() -> Result<()> {
     // buffer to hold bulk COPY data. Pre-allocating ~500KB to avoid reallocations
     let mut copy_payload_buffer = String::with_capacity(512_000);
 
-    // opts to fetch new messages (">") in batches from the configured redis stream
+    // redis will wait for either BATCH_COUNT messages or 100ms, whichever is first
     let opts = StreamReadOptions::default()
         .group(&consumer_group, &worker_name)
-        // redis will wait for either BATCH_COUNT messages or 100ms, whichever is first
         .count(BATCH_COUNT)
         .block(100);
 
+    // new messages
     let new_message_id: [&str; 1] = [">"];
 
     // (needs to be assigned because of lifetime witchcraft in the select macro)
