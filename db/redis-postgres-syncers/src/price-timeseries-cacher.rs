@@ -47,7 +47,7 @@ const TIERS: &[Tier] = &[
 async fn main() {
     let _ = dotenv();
 
-    if let Err(err) = helpers::init_tracing("price-history-timeseries") {
+    if let Err(err) = helpers::init_tracing("price-timeseries-cacher") {
         eprintln!("failed to initialize tracing: {:?}", err);
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);

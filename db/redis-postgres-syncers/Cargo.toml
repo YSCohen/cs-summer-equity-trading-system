@@ -22,8 +22,8 @@ name = "price-cacher"
 path = "src/price-cacher.rs"
 
 [[bin]]
-name = "price-history-timeseries"
-path = "src/price-history-timeseries.rs"
+name = "price-timeseries-cacher"
+path = "src/price-timeseries-cacher.rs"
 
 
 [dependencies]
