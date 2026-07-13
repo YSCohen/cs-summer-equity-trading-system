@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
 from api_client import submit_trades
 from account_picker import get_account_options
@@ -111,6 +110,8 @@ def _parse_input(raw_text: str) -> list[dict]:
 
 
 def _render_preview_grid(rows: list[dict]):
+    from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
+
     """Renders parsed trades as an AgGrid with green/red row coloring
     based on validity."""
     df = pd.DataFrame(rows)

@@ -1,7 +1,5 @@
 import pandas as pd
 import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
-from st_aggrid.shared import JsCode
 
 from account_picker import get_account_name
 
@@ -46,6 +44,8 @@ def render_trades_grid(rows, empty_message="No trades found.", key="trades_grid"
     if not rows:
         st.info(empty_message)
         return
+    from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+    from st_aggrid.shared import JsCode
 
     df = pd.DataFrame(rows)
 
