@@ -4,12 +4,12 @@
 //! compaction rules. Every tier carries its own retention, so history
 //! automatically decays into progressively coarser buckets as it ages:
 //!
-//!   price:{SYM}       raw 1m samples, kept 1 day
-//!   price:{SYM}:1h    hourly bars,    kept 1 week
-//!   price:{SYM}:1d    daily bars,     kept 1 year
+//!   price_history:{SYM}       raw 1m samples, kept 1 day
+//!   price_history:{SYM}:1h    hourly bars,    kept 1 week
+//!   price_history:{SYM}:1d    daily bars,     kept 1 year
 //!
 //! The API can read a window at the appropriate resolution with TS.RANGE, e.g.
-//! `TS.RANGE price:AAPL:1d - +` for the last year of daily closes.
+//! `TS.RANGE price_history:AAPL:1d - +` for the last year of daily closes.
 
 use anyhow::{Context, Result};
 use dotenvy::dotenv;
@@ -111,7 +111,7 @@ async fn run() -> Result<()> {
 
 /// Key of the raw 1-minute source series for a symbol.
 fn raw_key(symbol: &str) -> String {
-    format!("price:{symbol}")
+    format!("price_history:{symbol}")
 }
 
 /// Create the raw source series and its compaction tiers for a symbol.
