@@ -51,7 +51,7 @@ spec:
               value: "http://loki-stack.monitoring.svc.cluster.local:3100"
 
             - name: DELAY
-              value: "180"
+              value: "30"
 
             - name: WORKER_NAME
               valueFrom:

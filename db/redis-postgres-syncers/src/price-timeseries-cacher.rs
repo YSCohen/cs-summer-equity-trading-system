@@ -85,6 +85,7 @@ async fn run() -> Result<()> {
     debug!("ensured {} time series", symbols.len());
 
     loop {
+        debug!("updating latest samples...");
         let appended = append_all_latest_samples(&mut redis_conn, &symbols)
             .await
             .context("failed to append latest samples to redis")?;
@@ -123,7 +124,7 @@ async fn ensure_series(redis_conn: &mut MultiplexedConnection, symbol: &str) -> 
         return Ok(());
     }
 
-    debug!(symbol, "provisioning raw series and compaction tiers");
+    // debug!(symbol, "provisioning raw series and compaction tiers");
     // raw 1-minute source that everything else is compacted from
     create_series(redis_conn, &raw, RAW_RETENTION_MS, symbol, "1m").await?;
 
@@ -246,7 +247,7 @@ async fn append_all_latest_samples(
         return Ok(0);
     }
 
-    debug!("appending {queued} samples to redis in one pipeline");
+    debug!("executing pipeline...");
     pipe.query_async::<()>(redis_conn)
         .await
         .with_context(|| format!("redis pipeline TS.ADD of {queued} samples failed"))?;
