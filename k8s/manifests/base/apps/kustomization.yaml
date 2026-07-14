@@ -27,7 +27,7 @@ resources:
   - adminer
   - redisinsight
   - price-cacher
-  - price-timeseries-cacher
+  # - price-timeseries-cacher
 
 configMapGenerator:
   - name: db-routing
