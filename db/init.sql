@@ -30,6 +30,8 @@ CREATE TABLE positions (
     account_id UUID, -- accounts
     symbol_ticker TEXT,
     quantity INT,
+    average_cost NUMERIC,
+    total_realized_gains NUMERIC,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
 );
@@ -59,6 +61,8 @@ CREATE UNLOGGED TABLE positions_sync_stage (
     account_id UUID, -- accounts
     symbol_ticker TEXT,
     quantity INT,
+    average_cost NUMERIC,
+    total_realized_gains NUMERIC,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
 );
