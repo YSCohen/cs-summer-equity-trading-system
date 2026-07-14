@@ -1,6 +1,5 @@
 import pandas as pd
 import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 from account_picker import get_account_name
 
@@ -77,6 +76,8 @@ def render_positions_grid(rows, empty_message="No positions found.", key="positi
     if not rows:
         st.info(empty_message)
         return
+
+    from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
     df = pd.DataFrame(rows)
     gb = GridOptionsBuilder.from_dataframe(df)

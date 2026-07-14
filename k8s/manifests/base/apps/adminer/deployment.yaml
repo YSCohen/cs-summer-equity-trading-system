@@ -21,6 +21,12 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
+          env:
+            - name: PG_RO_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: db-routing
+                  key: PG_RO_HOST
           envFrom:
             - secretRef:
                 name: db-credentials

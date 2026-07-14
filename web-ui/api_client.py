@@ -4,6 +4,11 @@ import streamlit as st
 
 API_BASE_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
 
+CONNECTION_ERROR_MESSAGE = (
+    "Could not reach the backend. It may be down, still starting up, "
+    "or there may be a network issue -- try again in a moment."
+)
+
 
 def _get_session():
     if "http" not in st.session_state:
@@ -13,6 +18,23 @@ def _get_session():
             session.cookies.set("session", saved_cookie)
         st.session_state.http = session
     return st.session_state.http
+
+
+def _safe_call(fn, *args, **kwargs):
+    """Wraps a requests call (session.get/post/patch) so an unreachable
+    backend (down, still starting, DNS hiccup, connection refused, etc.)
+    shows a friendly Streamlit error instead of crashing the whole page
+    with a raw Python traceback -- which is what a bare requests.exceptions.
+    ConnectionError does today if it's allowed to propagate out of a
+    Streamlit script.
+
+    Returns the Response on success, or None on any connection-level
+    failure. Every call site below checks for None before touching
+    response.status_code/json()."""
+    try:
+        return fn(*args, **kwargs)
+    except requests.exceptions.RequestException:
+        return None
 
 
 def _api_error(response):
@@ -43,10 +65,13 @@ def _api_error(response):
 
 def login(username, password):
     session = _get_session()
-    response = session.post(
+    response = _safe_call(
+        session.post,
         f"{API_BASE_URL}/login",
         json={"username": username, "password": password},
     )
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         session_cookie = session.cookies.get("session")
@@ -69,10 +94,13 @@ def login(username, password):
 
 def register(username, password):
     session = _get_session()
-    response = session.post(
+    response = _safe_call(
+        session.post,
         f"{API_BASE_URL}/register",
         json={"username": username, "password": password},
     )
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         return {"status": "success", "username": username}
@@ -82,7 +110,9 @@ def register(username, password):
 
 def logout():
     session = _get_session()
-    response = session.post(f"{API_BASE_URL}/logout")
+    response = _safe_call(session.post, f"{API_BASE_URL}/logout")
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         return {"status": "success"}
@@ -94,7 +124,9 @@ def logout():
 
 def get_all_positions():
     session = _get_session()
-    response = session.get(f"{API_BASE_URL}/positions")
+    response = _safe_call(session.get, f"{API_BASE_URL}/positions")
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         return {"status": "success", "data": response.json()["message"]}
@@ -170,7 +202,11 @@ def _normalize_positions(raw, account_id=None, ticker=None):
 
 def get_positions_by_account(account_id):
     session = _get_session()
-    response = session.get(f"{API_BASE_URL}/positions/accounts/{account_id}")
+    response = _safe_call(
+        session.get, f"{API_BASE_URL}/positions/accounts/{account_id}"
+    )
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         raw = response.json()["message"]
@@ -181,7 +217,9 @@ def get_positions_by_account(account_id):
 
 def get_positions_by_ticker(ticker):
     session = _get_session()
-    response = session.get(f"{API_BASE_URL}/positions/ticker/{ticker}")
+    response = _safe_call(session.get, f"{API_BASE_URL}/positions/ticker/{ticker}")
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         # Already returns {account_id: [position, ...]} with account_name
@@ -194,9 +232,12 @@ def get_positions_by_ticker(ticker):
 
 def get_positions_by_account_and_ticker(account_id, ticker):
     session = _get_session()
-    response = session.get(
-        f"{API_BASE_URL}/positions/accounts/{account_id}/ticker/{ticker}"
+    response = _safe_call(
+        session.get,
+        f"{API_BASE_URL}/positions/accounts/{account_id}/ticker/{ticker}",
     )
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         raw = response.json()["message"]
@@ -228,7 +269,9 @@ def submit_trades(trades: list):
     every (or any) trade in the batch actually booked.
     """
     session = _get_session()
-    response = session.post(f"{API_BASE_URL}/trade", json=trades)
+    response = _safe_call(session.post, f"{API_BASE_URL}/trade", json=trades)
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         return {"status": "success", "data": response.json()}
@@ -264,7 +307,9 @@ def get_trades(
     if cursor_trade_id is not None:
         params["cursor_trade_id"] = cursor_trade_id
 
-    response = session.get(f"{API_BASE_URL}/trades", params=params)
+    response = _safe_call(session.get, f"{API_BASE_URL}/trades", params=params)
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         return {"status": "success", "data": response.json()}
@@ -292,7 +337,9 @@ def get_trade_by_id(trade_id):
     """NOTE: route is singular -- GET /trade/{trade_id}, not /trades/.
     Returns a single trade dict directly as `data`, not a list."""
     session = _get_session()
-    response = session.get(f"{API_BASE_URL}/trade/{trade_id}")
+    response = _safe_call(session.get, f"{API_BASE_URL}/trade/{trade_id}")
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         return {"status": "success", "data": response.json()}
@@ -306,7 +353,11 @@ def update_trade(trade_id, data):
     direction ('Buy'/'Sell'), quantity, price, and optionally
     other_account."""
     session = _get_session()
-    response = session.patch(f"{API_BASE_URL}/edit_trade/{trade_id}", json=data)
+    response = _safe_call(
+        session.patch, f"{API_BASE_URL}/edit_trade/{trade_id}", json=data
+    )
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         return {"status": "success", "data": response.json()}
@@ -318,10 +369,13 @@ def update_trade(trade_id, data):
 
 def create_account(name, can_short):
     session = _get_session()
-    response = session.post(
+    response = _safe_call(
+        session.post,
         f"{API_BASE_URL}/users/account",
         params={"account_name": name, "can_short": can_short},
     )
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         data = response.json()
@@ -336,7 +390,9 @@ def create_account(name, can_short):
 
 def add_account_to_user(account_id):
     session = _get_session()
-    response = session.post(f"{API_BASE_URL}/users/accounts/{account_id}")
+    response = _safe_call(session.post, f"{API_BASE_URL}/users/accounts/{account_id}")
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         return {"status": "success"}
@@ -349,7 +405,9 @@ def get_user_accounts():
     least account_id and name. Requires the new GET /users/accounts
     endpoint."""
     session = _get_session()
-    response = session.get(f"{API_BASE_URL}/users/allaccounts")
+    response = _safe_call(session.get, f"{API_BASE_URL}/users/allaccounts")
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
         return {"status": "success", "data": response.json()}
@@ -359,13 +417,17 @@ def get_user_accounts():
 
 def update_user_account(account_id, account_name=None, can_short=None):
     session = _get_session()
-    response = session.patch(
+    response = _safe_call(
+        session.patch,
         f"{API_BASE_URL}/users/update_account_details/{account_id}",
         json={
             "account_name": account_name,
             "can_short": can_short,
         },
     )
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
+
     if response.status_code == 200:
         return {"status": "success", "data": response.json()}
     else:

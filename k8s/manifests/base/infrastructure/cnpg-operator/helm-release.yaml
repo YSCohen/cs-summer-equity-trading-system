@@ -2,20 +2,20 @@
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: keda
+  name: cnpg
 spec:
-  interval: 10m
+  interval: 1h
   # dependsOn:
   #   - name: loki-stack
   #     namespace: monitoring
-  targetNamespace: keda
   chart:
     spec:
-      chart: keda
+      chart: cloudnative-pg
+      version: "0.29.0" # Uses a stable release version
       sourceRef:
         kind: HelmRepository
-        name: keda
-      version: "2.20.x" # Pin to a stable version
+        name: cnpg
+  targetNamespace: cnpg-system
   install:
     createNamespace: true
     crds: CreateReplace

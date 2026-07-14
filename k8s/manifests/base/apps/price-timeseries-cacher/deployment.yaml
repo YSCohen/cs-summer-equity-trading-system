@@ -2,18 +2,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: price-cacher
+  name: price-timeseries-cacher
   annotations:
     reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: price-cacher
+      app: price-timeseries-cacher
   template:
     metadata:
       labels:
-        app: price-cacher
+        app: price-timeseries-cacher
     spec:
       initContainers:
         - name: wait-for-loki
@@ -28,10 +28,10 @@ spec:
                 echo "{\"message\":\"Infrastructure not ready. Sleeping 2 seconds...\"}"
                 sleep 2
               done
-              echo "{\"message\":\"Infrastructure is online! Proceeding with price-cacher startup.\"}"
+              echo "{\"message\":\"Infrastructure is online! Proceeding with price-timeseries-cacher startup.\"}"
       containers:
-        - name: price-cacher
-          image: price-cacher-image
+        - name: price-timeseries-cacher
+          image: price-timeseries-cacher-image
           imagePullPolicy: Always
           resources:
             requests:

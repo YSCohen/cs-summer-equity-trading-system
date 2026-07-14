@@ -19,10 +19,22 @@ spec:
       adminPassword: "Rust!"
       dashboards:
         default:
-          fastapi-metrics:
-            gnetId: 14692
+          cnpg-cluster:
+            url: https://raw.githubusercontent.com/cloudnative-pg/grafana-dashboards/main/charts/cluster/grafana-dashboard.json
+            datasource: Prometheus
+          redis-exporter-standard:
+            gnetId: 763
             revision: 1
             datasource: Prometheus
+          redis-exporter-alt:
+            gnetId: 11692
+            revision: 1
+            datasource: Prometheus
+          node-exporter-full:
+            gnetId: 1860
+            revision: 37
+            datasource: Prometheus
+
 
       dashboardProviders:
         dashboardproviders.yaml:
@@ -40,7 +52,7 @@ spec:
                 path: /tmp/dashboards
             - name: "default"
               orgId: 1
-              folder: "Imported"
+              folder: ""
               type: file
               disableDeletion: false
               editable: true
@@ -48,7 +60,7 @@ spec:
                 path: /var/lib/grafana/dashboards/default
       grafana.ini:
         dashboards:
-          default_home_dashboard_path: /tmp/dashboards/Custom_Dashboards/custom-dashboard.json
+          default_home_dashboard_path: /tmp/dashboards/custom-dashboard.json
 
       sidecar:
         dashboards:

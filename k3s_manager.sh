@@ -229,21 +229,7 @@ bootstrap_flux() {
     echo "✅ Flux bootstrap complete!"
 }
 
-setup_db_secrets() {
-    echo "🔐 Generating db-credentials secret..."
-    PG_PASS=$(openssl rand -base64 24 | tr -d '=+/' | cut -c1-24)
 
-    for NS in data backend; do
-        echo "Applying secret to namespace: $NS"
-        kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
-        kubectl create secret generic db-credentials \
-            --from-literal=POSTGRES_USER=trade_admin \
-            --from-literal=POSTGRES_PASSWORD="$PG_PASS" \
-            --namespace="$NS" \
-            --dry-run=client -o yaml | kubectl apply -f -
-    done
-    echo "✅ db-credentials secret applied."
-}
 
 # Function to enable Tailscale Funnel
 update_self() {
@@ -362,11 +348,10 @@ while true; do
     echo "5) Configure Local USB Storage"
     echo "6) Bootstrap FluxCD"
     echo "7) Uninstall K3s"
-    echo "8) Setup Database Secrets"
-    echo "9) Update Manager"
-    echo "10) Exit"
+    echo "8) Update Manager"
+    echo "9) Exit"
     echo "======================================"
-    read -p "Select an option [1-10]: " choice
+    read -p "Select an option [1-9]: " choice
 
     case $choice in
     1) install_control_plane ;;
@@ -376,9 +361,8 @@ while true; do
     5) setup_local_storage ;;
     6) bootstrap_flux ;;
     7) uninstall_k3s ;;
-    8) setup_db_secrets ;;
-    9) update_self ;;
-    10)
+    8) update_self ;;
+    9)
         echo "Goodbye!"
         exit 0
         ;;

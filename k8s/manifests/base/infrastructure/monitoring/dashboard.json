@@ -9,23 +9,13 @@
       "type": "row",
       "title": "FastAPI \u2014 Hardware Metrics",
       "collapsed": true,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "panels": [
         {
           "id": 2,
           "title": "Active Replicas",
           "type": "stat",
-          "gridPos": {
-            "h": 8,
-            "w": 6,
-            "x": 0,
-            "y": 1
-          },
+          "gridPos": { "h": 8, "w": 6, "x": 0, "y": 1 },
           "datasource": {
             "type": "prometheus",
             "uid": "Prometheus"
@@ -53,12 +43,7 @@
           "id": 4,
           "title": "Total CPU Utilization (%)",
           "type": "stat",
-          "gridPos": {
-            "h": 8,
-            "w": 6,
-            "x": 6,
-            "y": 1
-          },
+          "gridPos": { "h": 8, "w": 6, "x": 6, "y": 1 },
           "datasource": {
             "type": "prometheus",
             "uid": "Prometheus"
@@ -112,12 +97,7 @@
           "id": 5,
           "title": "CPU Usage per Pod (Cores)",
           "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 1
-          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
           "datasource": {
             "type": "prometheus",
             "uid": "Prometheus"
@@ -148,12 +128,7 @@
           "id": 6,
           "title": "Memory Usage per Pod",
           "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 9
-          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
           "datasource": {
             "type": "prometheus",
             "uid": "Prometheus"
@@ -184,12 +159,7 @@
           "id": 7,
           "title": "Network I/O per Pod (bytes/s)",
           "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 9
-          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
           "datasource": {
             "type": "prometheus",
             "uid": "Prometheus"
@@ -233,23 +203,13 @@
       "type": "row",
       "title": "FastAPI \u2014 HTTP Traffic",
       "collapsed": true,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 1
-      },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 1 },
       "panels": [
         {
           "id": 201,
           "title": "Requests Per Second by Endpoint",
           "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 0,
-            "y": 2
-          },
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 2 },
           "datasource": {
             "type": "prometheus",
             "uid": "Prometheus"
@@ -274,12 +234,7 @@
           "id": 202,
           "title": "HTTP Error Rate (4xx & 5xx)",
           "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 8,
-            "y": 2
-          },
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 2 },
           "datasource": {
             "type": "prometheus",
             "uid": "Prometheus"
@@ -308,12 +263,7 @@
           "id": 203,
           "title": "Response Latency (P50 / P95 / P99)",
           "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 16,
-            "y": 2
-          },
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 2 },
           "datasource": {
             "type": "prometheus",
             "uid": "Prometheus"
@@ -357,12 +307,7 @@
           "id": 204,
           "title": "In-flight Requests",
           "type": "stat",
-          "gridPos": {
-            "h": 8,
-            "w": 6,
-            "x": 0,
-            "y": 10
-          },
+          "gridPos": { "h": 8, "w": 6, "x": 0, "y": 10 },
           "datasource": {
             "type": "prometheus",
             "uid": "Prometheus"
@@ -389,12 +334,7 @@
           "id": 205,
           "title": "Average Response Time by Endpoint",
           "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 18,
-            "x": 6,
-            "y": 10
-          },
+          "gridPos": { "h": 8, "w": 18, "x": 6, "y": 10 },
           "datasource": {
             "type": "prometheus",
             "uid": "Prometheus"
@@ -428,12 +368,7 @@
           "id": 301,
           "title": "Trade Writer Logs",
           "type": "logs",
-          "gridPos": {
-            "h": 12,
-            "w": 8,
-            "x": 0,
-            "y": 3
-          },
+          "gridPos": { "h": 12, "w": 6, "x": 0, "y": 3 },
           "options": {
             "showTime": true,
             "sortOrder": "Ascending",
@@ -452,12 +387,7 @@
           "id": 401,
           "title": "DB Syncer Logs",
           "type": "logs",
-          "gridPos": {
-            "h": 12,
-            "w": 8,
-            "x": 8,
-            "y": 3
-          },
+          "gridPos": { "h": 12, "w": 6, "x": 6, "y": 3 },
           "options": {
             "showTime": true,
             "sortOrder": "Ascending",
@@ -479,12 +409,7 @@
           "id": 402,
           "title": "Price Cacher Logs",
           "type": "logs",
-          "gridPos": {
-            "h": 12,
-            "w": 8,
-            "x": 16,
-            "y": 3
-          },
+          "gridPos": { "h": 12, "w": 6, "x": 12, "y": 3 },
           "options": {
             "showTime": true,
             "sortOrder": "Ascending",
@@ -498,6 +423,28 @@
                 "uid": "Loki"
               },
               "expr": "{app=\"price-cacher\"} | json | __error__=\"\" | (_module_path =~ \"price_cacher|helpers\") or (level !~ \"(?i)debug\") | line_format \"{{.message}}\"",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 403,
+          "title": "Price History Timeseries Cacher Logs",
+          "type": "logs",
+          "gridPos": { "h": 12, "w": 6, "x": 18, "y": 3 },
+          "options": {
+            "showTime": true,
+            "sortOrder": "Ascending",
+            "enableLogDetails": true,
+            "wrapLogMessage": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "Loki"
+              },
+              "expr": "{app=\"price-timeseries-cacher\"} | json | __error__=\"\" | (_module_path =~ \"price_timeseries_cacher|helpers\") or (level !~ \"(?i)debug\") | line_format \"{{.message}}\"",
               "refId": "A"
             }
           ]
@@ -515,12 +462,7 @@
           "id": 502,
           "title": "Errors",
           "type": "logs",
-          "gridPos": {
-            "h": 12,
-            "w": 12,
-            "x": 0,
-            "y": 4
-          },
+          "gridPos": { "h": 12, "w": 12, "x": 0, "y": 4 },
           "options": {
             "showTime": true,
             "sortOrder": "Ascending",
@@ -544,12 +486,7 @@
           "id": 503,
           "title": "Warnings",
           "type": "logs",
-          "gridPos": {
-            "h": 12,
-            "w": 12,
-            "x": 12,
-            "y": 4
-          },
+          "gridPos": { "h": 12, "w": 12, "x": 12, "y": 4 },
           "options": {
             "showTime": true,
             "sortOrder": "Ascending",
@@ -581,23 +518,13 @@
       "type": "row",
       "title": "Live Logs \u2014 Databases",
       "collapsed": true,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 4
-      },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 },
       "panels": [
         {
           "id": 10,
           "title": "Postgres",
           "type": "logs",
-          "gridPos": {
-            "h": 10,
-            "w": 12,
-            "x": 0,
-            "y": 4
-          },
+          "gridPos": { "h": 10, "w": 12, "x": 0, "y": 4 },
           "options": {
             "showTime": true,
             "sortOrder": "Ascending",
@@ -609,7 +536,7 @@
                 "type": "loki",
                 "uid": "Loki"
               },
-              "expr": "{app=\"postgres\"}",
+              "expr": "{namespace=\"data\", pod=~\"trading-db-.*\"}",
               "refId": "A"
             }
           ]
@@ -618,12 +545,7 @@
           "id": 11,
           "title": "Redis",
           "type": "logs",
-          "gridPos": {
-            "h": 10,
-            "w": 12,
-            "x": 12,
-            "y": 4
-          },
+          "gridPos": { "h": 10, "w": 12, "x": 12, "y": 4 },
           "options": {
             "showTime": true,
             "sortOrder": "Ascending",
@@ -647,23 +569,13 @@
       "type": "row",
       "title": "Live Logs \u2014 Applications",
       "collapsed": true,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 5
-      },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
       "panels": [
         {
           "id": 12,
           "title": "Streamlit",
           "type": "logs",
-          "gridPos": {
-            "h": 10,
-            "w": 12,
-            "x": 0,
-            "y": 5
-          },
+          "gridPos": { "h": 10, "w": 12, "x": 0, "y": 5 },
           "options": {
             "showTime": true,
             "sortOrder": "Ascending",
@@ -684,12 +596,7 @@
           "id": 13,
           "title": "FastAPI",
           "type": "logs",
-          "gridPos": {
-            "h": 10,
-            "w": 12,
-            "x": 12,
-            "y": 5
-          },
+          "gridPos": { "h": 10, "w": 12, "x": 12, "y": 5 },
           "options": {
             "showTime": true,
             "sortOrder": "Ascending",
@@ -705,6 +612,205 @@
               "refId": "A"
             }
           ]
+        }
+      ]
+    },
+    {
+      "id": 600,
+      "type": "row",
+      "title": "Cluster Health — Node Counts",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 600 },
+      "panels": []
+    },
+    {
+      "id": 601,
+      "title": "Postgres Nodes Up",
+      "type": "stat",
+      "description": "Calculates health percentage: sum(cnpg_collector_up) / 3 expected instances.",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 601 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "instant": true,
+          "expr": "sum(cnpg_collector_up{cluster=\"trading-db\", job=\"kubernetes-pods\"}) / 3",
+          "legendFormat": "Health",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 602,
+      "title": "Redis Pods Ready",
+      "type": "stat",
+      "description": "Calculates health percentage: Ready Pods / Expected Replicas (from kube_statefulset_replicas).",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 601 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "instant": true,
+          "expr": "sum(kube_pod_status_ready{exported_namespace=\"data\", condition=\"true\", pod=~\"redis-node-.*\"}) / sum(kube_statefulset_replicas{statefulset=\"redis-node\"})",
+          "legendFormat": "Health",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 603,
+      "title": "Backend Namespace Pods Ready",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 601 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": null }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "instant": true,
+          "expr": "sum(kube_pod_status_ready{exported_namespace=\"backend\", condition=\"true\"})",
+          "legendFormat": "Ready",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "instant": true,
+          "expr": "count(kube_pod_status_ready{exported_namespace=\"backend\", condition=\"true\"})",
+          "legendFormat": "Total",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 604,
+      "title": "Data Namespace Pods Ready",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 601 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": null }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "instant": true,
+          "expr": "sum(kube_pod_status_ready{exported_namespace=\"data\", condition=\"true\"})",
+          "legendFormat": "Ready",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "instant": true,
+          "expr": "count(kube_pod_status_ready{exported_namespace=\"data\", condition=\"true\"})",
+          "legendFormat": "Total",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 605,
+      "title": "All Systems Status",
+      "type": "stat",
+      "description": "1 only when Postgres nodes-up == 3 AND backend/data/frontend namespaces are 100% pod-ready. Any degradation anywhere flips this to 0/red.",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 609 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DEGRADED" } } },
+            {
+              "type": "value",
+              "options": { "1": { "text": "ALL SYSTEMS GO" } }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "instant": true,
+          "expr": "(sum(cnpg_collector_up{cluster=\"trading-db\", job=\"kubernetes-pods\"}) == bool 3) * (sum(kube_pod_status_ready{exported_namespace=\"backend\", condition=\"true\"}) == bool count(kube_pod_status_ready{exported_namespace=\"backend\", condition=\"true\"})) * (sum(kube_pod_status_ready{exported_namespace=\"data\", condition=\"true\"}) == bool count(kube_pod_status_ready{exported_namespace=\"data\", condition=\"true\"})) * (sum(kube_pod_status_ready{exported_namespace=\"frontend\", condition=\"true\"}) == bool count(kube_pod_status_ready{exported_namespace=\"frontend\", condition=\"true\"}))",
+          "refId": "A"
         }
       ]
     }
