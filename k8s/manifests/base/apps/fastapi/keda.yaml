@@ -21,6 +21,16 @@ spec:
             - type: Percent
               value: 100
               periodSeconds: 15
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 15
+            - type: Percent
+              value: 25
+              periodSeconds: 15
+          selectPolicy: Max
   triggers:
     - type: cpu
       metricType: Utilization

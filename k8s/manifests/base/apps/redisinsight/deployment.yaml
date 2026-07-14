@@ -27,9 +27,15 @@ spec:
             # This is the RedisInsight analog of Adminer's autologin. Auth is
             # disabled on the Redis HelmRelease, so no username/password is needed.
             - name: RI_REDIS_HOST
-              value: redis-proxy.data.svc.cluster.local
+              valueFrom:
+                configMapKeyRef:
+                  name: redis-config
+                  key: REDIS_HOST
             - name: RI_REDIS_PORT
-              value: "6379"
+              valueFrom:
+                configMapKeyRef:
+                  name: redis-config
+                  key: REDIS_PORT
             - name: RI_REDIS_ALIAS
               value: trading-redis
           resources:

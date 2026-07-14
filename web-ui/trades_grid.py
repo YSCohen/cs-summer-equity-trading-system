@@ -53,7 +53,6 @@ def render_trades_grid(rows, empty_message="No trades found.", key="trades_grid"
 
     from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
     from st_aggrid.shared import JsCode
-
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_default_column(sortable=True, filter=True, resizable=True)
     gb.configure_pagination(paginationAutoPageSize=True)
