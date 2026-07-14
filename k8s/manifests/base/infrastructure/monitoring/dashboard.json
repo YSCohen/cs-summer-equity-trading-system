@@ -429,7 +429,7 @@
         },
         {
           "id": 403,
-          "title": "Price History Timeseries Cacher Logs",
+          "title": "Redis Populator Logs (Usually Empty)",
           "type": "logs",
           "gridPos": { "h": 12, "w": 12, "x": 12, "y": 15 },
           "options": {
@@ -444,7 +444,7 @@
                 "type": "loki",
                 "uid": "Loki"
               },
-              "expr": "{app=\"price-timeseries-cacher\"} | json | __error__=\"\" | (_module_path =~ \"price_timeseries_cacher|helpers\") or (level !~ \"(?i)debug\") | line_format \"{{.message}}\"",
+              "expr": "{app=\"redis-populator\"} | json | __error__=\"\" | (_module_path =~ \"price_timeseries_cacher|helpers\") or (level !~ \"(?i)debug\") | line_format \"{{.message}}\"",
               "refId": "A"
             }
           ]
