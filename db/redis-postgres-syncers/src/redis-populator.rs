@@ -4,7 +4,6 @@
 
 use anyhow::{Context, Result};
 use dotenvy::dotenv;
-use serde::Serialize;
 use tokio_postgres::Row;
 use tracing::{debug, info, trace, warn};
 
@@ -120,15 +119,6 @@ async fn populate_hash(
     Ok(())
 }
 
-#[derive(Serialize)]
-struct User {
-    username: String,
-    oauth_key: String,
-    accounts_associated: Vec<String>,
-    created_at: String,
-    updated_at: String,
-}
-
 async fn populate_users(
     pg_client: &tokio_postgres::Client,
     redis_conn: &mut redis::aio::MultiplexedConnection,
@@ -149,7 +139,7 @@ async fn populate_users(
             ),
             row_to_entry: |row| {
                 let id: String = row.try_get("user_id").context("user_id")?;
-                let user = User {
+                let user = helpers::User {
                     username: row.try_get("username").context("username")?,
                     oauth_key: row.try_get("oauth_key").context("oauth_key")?,
                     accounts_associated: row
@@ -165,15 +155,6 @@ async fn populate_users(
         },
     )
     .await
-}
-
-#[derive(Serialize)]
-struct Account {
-    account_name: String,
-    positions: Vec<String>,
-    can_short: bool,
-    created_at: String,
-    updated_at: String,
 }
 
 async fn populate_accounts(
@@ -196,7 +177,7 @@ async fn populate_accounts(
             ),
             row_to_entry: |row| {
                 let id: String = row.try_get("account_id").context("account_id")?;
-                let account = Account {
+                let account = helpers::Account {
                     account_name: row.try_get("account_name").context("account_name")?,
                     positions: row.try_get("positions").context("positions")?,
                     can_short: row.try_get("can_short").context("can_short")?,
@@ -210,17 +191,6 @@ async fn populate_accounts(
         },
     )
     .await
-}
-
-#[derive(Serialize)]
-struct Position {
-    account_id: String,
-    symbol_ticker: String,
-    quantity: i32,
-    average_cost: Option<f64>,
-    total_realized_gains: Option<f64>,
-    created_at: String,
-    updated_at: String,
 }
 
 async fn populate_positions(
@@ -245,7 +215,7 @@ async fn populate_positions(
             ),
             row_to_entry: |row| {
                 let id: String = row.try_get("position_id").context("position_id")?;
-                let position = Position {
+                let position = helpers::Position {
                     account_id: row.try_get("account_id").context("account_id")?,
                     symbol_ticker: row.try_get("symbol_ticker").context("symbol_ticker")?,
                     quantity: row.try_get("quantity").context("quantity")?,
