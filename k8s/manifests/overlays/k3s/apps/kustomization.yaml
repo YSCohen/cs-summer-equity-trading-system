@@ -10,3 +10,10 @@ resources:
 
 patches:
   - path: ingress-overwrite.yaml
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: streamlit-ingress
+      $patch: delete
+
