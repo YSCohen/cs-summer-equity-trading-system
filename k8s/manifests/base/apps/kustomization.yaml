@@ -23,6 +23,7 @@ resources:
   - trade-writer
   - db-syncer
   - adminer
+  - redisinsight
   - price-cacher
 
 configMapGenerator:
