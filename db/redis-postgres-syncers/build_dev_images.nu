@@ -6,6 +6,7 @@ def main [...rest] {
         build db-syncer
         build price-cacher
         build price-timeseries-cacher
+        build redis-populator
     } else {
         $rest | each {build $in} | ignore
     }
