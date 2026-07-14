@@ -313,6 +313,10 @@ struct Position {
     account_id: String,
     symbol_ticker: String,
     quantity: i32,
+    #[serde(default)]
+    average_cost: Option<f64>,
+    #[serde(default)]
+    total_realized_gains: Option<f64>,
     created_at: String,
     updated_at: String,
 }
@@ -329,17 +333,19 @@ async fn sync_positions(
             redis_key: "positions",
             staging_table_name: "positions_sync_stage",
             target_table_name: "positions",
-            copy_columns: "position_id, account_id, symbol_ticker, quantity, created_at, updated_at",
+            copy_columns: "position_id, account_id, symbol_ticker, quantity, average_cost, total_realized_gains, created_at, updated_at",
             conflict_column: "position_id",
-            update_assignments: "quantity = EXCLUDED.quantity,\n    updated_at = EXCLUDED.updated_at",
+            update_assignments: "quantity = EXCLUDED.quantity,\n    average_cost = EXCLUDED.average_cost,\n    total_realized_gains = EXCLUDED.total_realized_gains,\n    updated_at = EXCLUDED.updated_at",
             parse_row: |id, json| parse_json_row::<Position>("position", id, json),
             format_row: |id, data| {
                 format!(
-                    "{}\t{}\t{}\t{}\t{}\t{}",
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                     id,
                     data.account_id,
                     data.symbol_ticker,
                     data.quantity,
+                    to_pg_optional_numeric(data.average_cost),
+                    to_pg_optional_numeric(data.total_realized_gains),
                     data.created_at,
                     data.updated_at,
                 )
@@ -347,6 +353,13 @@ async fn sync_positions(
         },
     )
     .await
+}
+
+fn to_pg_optional_numeric(value: Option<f64>) -> String {
+    match value {
+        Some(v) => v.to_string(),
+        None => "\\N".to_string(),
+    }
 }
 
 fn to_pg_text_array_literal(values: &[String]) -> String {
