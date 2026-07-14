@@ -36,9 +36,15 @@ async fn run() -> Result<()> {
 
     loop {
         debug!("starting sync cycle");
-        sync_users(&pg_client, &mut redis_conn).await.context("user sync failed")?;
-        sync_accounts(&pg_client, &mut redis_conn).await.context("account sync failed")?;
-        sync_positions(&pg_client, &mut redis_conn).await.context("position sync failed")?;
+        sync_users(&pg_client, &mut redis_conn)
+            .await
+            .context("user sync failed")?;
+        sync_accounts(&pg_client, &mut redis_conn)
+            .await
+            .context("account sync failed")?;
+        sync_positions(&pg_client, &mut redis_conn)
+            .await
+            .context("position sync failed")?;
         info!("sync cycle complete");
 
         debug!(sync_interval, "sleeping until next sync cycle");

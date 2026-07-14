@@ -92,9 +92,11 @@ async fn update_all_cached_prices(
     }
 
     debug!("writing {queued} quotes to redis in one pipeline");
-    pipe.query_async::<()>(redis_conn).await.context("failed to execute redis pipeline")?;
+    pipe.query_async::<()>(redis_conn)
+        .await
+        .context("failed to execute redis pipeline")?;
     debug!("redis pipeline executed");
-    
+
     Ok(queued)
 }
 
