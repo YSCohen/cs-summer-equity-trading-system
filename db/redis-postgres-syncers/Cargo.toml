@@ -25,10 +25,6 @@ path = "src/redis-populator.rs"
 name = "price-cacher"
 path = "src/price-cacher.rs"
 
-[[bin]]
-name = "price-timeseries-cacher"
-path = "src/price-timeseries-cacher.rs"
-
 
 [dependencies]
 anyhow = "1.0"
