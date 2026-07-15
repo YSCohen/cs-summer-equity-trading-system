@@ -5,4 +5,4 @@ kind: Kustomization
 namespace: backend
 
 resources:
-  - deployment.yaml
+  - cronjob.yaml
