@@ -10,15 +10,15 @@ events: ## ⚠️  Show recent cluster events sorted by time
 	@echo "⚠️  RECENT CLUSTER EVENTS:"
 	@$(DOCKER) exec k8s-toolbox bash -c 'kubectl get events --sort-by=".metadata.creationTimestamp" -A | tail -n 30'
 
-status: ## 🟢 CURRENT POD STATUS:
+status: ## 🟢 Show current pod status across all namespaces
 	@echo "🟢 CURRENT POD STATUS:"
 	@$(DOCKER) exec k8s-toolbox kubectl get pods -A
 
-status-wide: ## 🌐 WIDE POD OVERVIEW:
+status-wide: ## 🌐 Show pod status with node/IP details
 	@echo "🌐 WIDE POD OVERVIEW:"
 	@$(DOCKER) exec k8s-toolbox kubectl get pods -A -o wide
 
-status-svc: ## 🔌 ACTIVE NETWORK SERVICES:
+status-svc: ## 🔌 Show active network services
 	@echo "🔌 ACTIVE NETWORK SERVICES:"
 	@$(DOCKER) exec k8s-toolbox kubectl get svc -A
 

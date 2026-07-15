@@ -45,15 +45,15 @@ adminer-info: ## 🌐 Adminer UI: http://adminer.localhost:8080
 	@echo -n "Pass: "
 	@$(DOCKER) exec k8s-toolbox kubectl get secret db-credentials -n data -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d; echo ""
 
-psql: ## 🐘 Starting interactive PostgreSQL session...
+psql: ## 🐘 Open an interactive PostgreSQL session
 	@echo "🐘 Starting interactive PostgreSQL session..."
 	@$(DOCKER) exec -it k8s-toolbox bash -c 'POD=$$(kubectl get pods -n data -l "cnpg.io/cluster=trading-db,cnpg.io/instanceRole=primary" -o jsonpath="{.items[0].metadata.name}"); kubectl exec -it $$POD -n data -- psql -U trade_admin -d trading'
 
-redis-cli: ## 🔴 Connecting to Redis CLI dynamically...
+redis-cli: ## 🔴 Open the Redis CLI on the active node
 	@echo "🔴 Finding active Redis node and launching CLI..."
 	@$(DOCKER) exec -it k8s-toolbox bash -c 'POD=$$(kubectl get pods -n data -l "app.kubernetes.io/name=redis" -o jsonpath="{.items[0].metadata.name}" 2>/dev/null || kubectl get pods -n data -l "app=redis" -o jsonpath="{.items[0].metadata.name}"); kubectl exec -it $$POD -n data -- redis-cli'
 
-redis-sentinel: ## 🛡️ Connecting to Redis Sentinel CLI...
+redis-sentinel: ## 🛡️ Check Redis Sentinel quorum status
 	@echo "🛡️ Connecting to Sentinel to check quorum..."
 	@$(DOCKER) exec -it k8s-toolbox bash -c 'POD=$$(kubectl get pods -n data -l "app.kubernetes.io/name=redis,app.kubernetes.io/component=sentinel" -o jsonpath="{.items[0].metadata.name}"); kubectl exec -it $$POD -n data -- redis-cli -p 26379 info sentinel'
 
