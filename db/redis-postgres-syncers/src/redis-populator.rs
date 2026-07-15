@@ -39,6 +39,9 @@ async fn run() -> Result<()> {
     populate_positions(&pg_client, &mut redis_conn)
         .await
         .context("position populate failed")?;
+    populate_username(&pg_client, &mut redis_conn)
+        .await
+        .context("username populate failed")?;
     info!("populate complete");
 
     Ok(())
@@ -151,6 +154,28 @@ async fn populate_users(
                 let json = serde_json::to_string(&user)
                     .with_context(|| format!("serializing user {id}"))?;
                 Ok((id, json))
+            },
+        },
+    )
+    .await
+}
+
+async fn populate_username(
+    pg_client: &tokio_postgres::Client,
+    redis_conn: &mut redis::aio::MultiplexedConnection,
+) -> Result<()> {
+    populate_hash(
+        pg_client,
+        redis_conn,
+        HashPopulateSpec {
+            entity_name: "usernames",
+            redis_key: "username",
+            select_query: "SELECT username, user_id::text AS user_id FROM username",
+            // the redis value is the bare uuid string, not JSON.
+            row_to_entry: |row| {
+                let username: String = row.try_get("username").context("username")?;
+                let user_id: String = row.try_get("user_id").context("user_id")?;
+                Ok((username, user_id))
             },
         },
     )

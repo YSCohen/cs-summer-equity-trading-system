@@ -45,6 +45,9 @@ async fn run() -> Result<()> {
         sync_positions(&pg_client, &mut redis_conn)
             .await
             .context("position sync failed")?;
+        sync_usernames(&pg_client, &mut redis_conn)
+            .await
+            .context("username sync failed")?;
         info!("sync cycle complete");
 
         debug!(sync_interval, "sleeping until next sync cycle");
@@ -319,6 +322,29 @@ async fn sync_positions(
                     data.updated_at,
                 )
             },
+        },
+    )
+    .await
+}
+
+async fn sync_usernames(
+    pg_client: &tokio_postgres::Client,
+    redis_conn: &mut redis::aio::MultiplexedConnection,
+) -> Result<()> {
+    sync_json_hash_table(
+        pg_client,
+        redis_conn,
+        JsonHashTableSyncSpec {
+            entity_name: "usernames",
+            redis_key: "username",
+            staging_table_name: "username_sync_stage",
+            target_table_name: "username",
+            copy_columns: "username, user_id",
+            conflict_column: "username",
+            update_assignments: "user_id = EXCLUDED.user_id",
+            // the redis value is a bare uuid string, not JSON — pass it through.
+            parse_row: |_username, user_id| Ok(user_id.to_string()),
+            format_row: |username, user_id| format!("{}\t{}", username, user_id),
         },
     )
     .await
