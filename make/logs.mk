@@ -59,6 +59,6 @@ logs-all: ## 📜 Show the last 50 lines from every pod (no follow)
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=trade-writer -n backend    --tail=50 --prefix
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=db-syncer  -n backend      --tail=50 --prefix
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=price-cacher  -n backend      --tail=50 --prefix
-	# @$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=price-timeseries-cacher  -n backend      --tail=50 --prefix
+	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=redis-populator -n backend    --tail=50 --prefix
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l cnpg.io/cluster=trading-db -n data --tail=50 --prefix
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=redis      -n data         --tail=50 --prefix

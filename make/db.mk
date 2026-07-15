@@ -16,21 +16,27 @@ db-clear: ## ⚠️ WIPE the entire trading database (Destructive)
 			POD=$$(kubectl get pods -n data -l "cnpg.io/cluster=trading-db,cnpg.io/instanceRole=primary" -o jsonpath="{.items[0].metadata.name}") && \
 			kubectl exec -n data $$POD -- psql -U postgres -d trading -c "TRUNCATE TABLE trades, accounts, users, positions, users_sync_stage, accounts_sync_stage, positions_sync_stage CASCADE;" \
 		'; \
-		echo "🧹 Flushing Redis Cache..."; \
+		echo "✅ Database data completely cleared!"; \
+		echo "🧹 Flushing Redis Cache completely..."; \
 		$(DOCKER) exec -it k8s-toolbox bash -c '\
 			REDIS_POD=$$(kubectl get pods -n data -l "app.kubernetes.io/name=redis" -o jsonpath="{.items[0].metadata.name}" 2>/dev/null || kubectl get pods -n data -l "app=redis" -o jsonpath="{.items[0].metadata.name}") && \
 			kubectl exec -n data $$REDIS_POD -- sh -c "redis-cli --scan | xargs -r redis-cli del" \
 		'; \
-		echo "✅ Database data and Redis completely cleared!"; \
-		echo "♻️ Restarting dependent deployments to flush stale DB connections..."; \
+		echo "🚀 Triggering redis-populator job (to rebuild empty caches)..."; \
+		JOB_NAME="redis-populator-manual-$$(date +%s)"; \
+		$(DOCKER) exec -it k8s-toolbox kubectl create job --from=cronjob/redis-populator $$JOB_NAME -n backend; \
+		echo "⏳ Waiting for redis-populator to finish..."; \
+		$(DOCKER) exec -it k8s-toolbox kubectl wait --for=condition=complete job/$$JOB_NAME -n backend --timeout=60s; \
+		echo "♻️ Restarting dependent deployments in correct sequence..."; \
 		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trading-pooler -n data; \
 		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trading-pooler-ro -n data; \
-		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/adminer -n data; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/price-cacher -n backend; \
 		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/fastapi-api -n backend; \
 		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trade-writer -n backend; \
 		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/db-syncer -n backend; \
-		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/price-cacher -n backend; \
-		# $(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/price-timeseries-cacher -n backend; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/adminer -n data; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/streamlit -n frontend; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/locust-load-tester -n load-testing; \
 		;; \
 	*) \
 		echo "Aborted."; \
@@ -115,20 +121,25 @@ db-restore: ## ⚠️ RESTORE snapshot to the trading DB (Destructive)
 				kubectl exec -n data $$POD -- pg_restore -U postgres -d trading --clean --if-exists /dev/shm/trading_backup.dump \
 			'; \
 			echo "✅ Database restored successfully!"; \
-			echo "🧹 Flushing Redis Cache to prevent state mismatch..."; \
+			echo "🧹 Flushing Redis Cache completely to remove stale streams..."; \
 			$(DOCKER) exec -it k8s-toolbox bash -c '\
 				REDIS_POD=$$(kubectl get pods -n data -l "app.kubernetes.io/name=redis" -o jsonpath="{.items[0].metadata.name}" 2>/dev/null || kubectl get pods -n data -l "app=redis" -o jsonpath="{.items[0].metadata.name}") && \
 				kubectl exec -n data $$REDIS_POD -- sh -c "redis-cli --scan | xargs -r redis-cli del" \
 			'; \
-			echo "♻️ Restarting dependent deployments to flush stale DB connections..."; \
+			echo "🚀 Triggering redis-populator job to rebuild caches..."; \
+			JOB_NAME="redis-populator-manual-$$(date +%s)"; \
+			$(DOCKER) exec -it k8s-toolbox kubectl create job --from=cronjob/redis-populator $$JOB_NAME -n backend; \
+			echo "⏳ Waiting for redis-populator to finish..."; \
+			$(DOCKER) exec -it k8s-toolbox kubectl wait --for=condition=complete job/$$JOB_NAME -n backend --timeout=60s; \
+			echo "♻️ Restarting dependent deployments in correct sequence..."; \
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trading-pooler -n data; \
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trading-pooler-ro -n data; \
-			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/adminer -n data; \
+			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/price-cacher -n backend; \
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/fastapi-api -n backend; \
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trade-writer -n backend; \
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/db-syncer -n backend; \
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/price-cacher -n backend; \
-			# $(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/price-timeseries-cacher -n backend; \
+			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/price-timeseries-cacher -n backend; \
 			break; \
 		fi; \
 	done

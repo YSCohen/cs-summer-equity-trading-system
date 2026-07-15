@@ -19,3 +19,4 @@ You can clone our k3s manager here
 ```sh 
 curl -sSL "https://raw.githubusercontent.com/SM26-Industrial-Software-Dev/equity-trading-system/main/k3s_manager.sh" -o k3s_manager.sh && chmod +x k3s_manager.sh
 ```
+

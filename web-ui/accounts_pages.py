@@ -45,10 +45,12 @@ def render_create_account_page():
     st.header("➕ Open a New Account")
     st.caption("POST /users/account")
 
-    name = st.text_input("Account Name", placeholder="e.g. Retirement, Trading")
-    can_short = st.checkbox("Can Short")
+    with st.form("create_account_form"):
+        name = st.text_input("Account Name", placeholder="e.g. Retirement, Trading")
+        can_short = st.checkbox("Can Short")
+        submitted = st.form_submit_button("Create Account")
 
-    if st.button("Create Account"):
+    if submitted:
         result = create_account(name, can_short)
         if result["status"] == "success":
             _invalidate_account_options_cache()

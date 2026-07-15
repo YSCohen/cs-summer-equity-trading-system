@@ -18,7 +18,7 @@ spec:
       containers: []
       initContainers:
         - name: wait-for-primary
-          image: busybox:1.36
+          image: busybox:latest
           command:
             - sh
             - -c

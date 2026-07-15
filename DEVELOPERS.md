@@ -31,6 +31,13 @@ All `kubectl` operations are mapped to `Makefile` targets — no need to memoriz
     * `make shell-api` / `make shell-ui`: Hop into a container shell if you need to inspect files.
     * `make psql`: Jump straight into the Postgres console.
     * `make redis-cli`: Open the Redis CLI.
+* **Database Operations**:
+    * `make db-backup`: Takes a full snapshot of the Postgres trading database and saves it to the project root.
+    * `make db-restore`: Wipes the database and interactively restores it from a selected snapshot file.
+    * `make db-clear`: Wipes the entire database cleanly and rebuilds the Redis caches.
+* **Chaos & Restarting**:
+    * `make bounce`: Interactive menu to safely restart any deployment.
+    * `make chaos`: Interactive menu to scale components down to 0 to simulate failures.
 
 ---
 
