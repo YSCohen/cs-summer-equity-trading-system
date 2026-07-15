@@ -1,21 +1,21 @@
 .PHONY: k3s-status k3s-events k3s-ks k3s-sync k3s-logs k3s-db-backup k3s-db-restore k3s-db-clear
 
-# ==========================================
-# 🚀 K3S (DEBIAN) SPECIFIC COMMANDS
-# ==========================================
+# ===============================================
+# 🚀 K3S CONTROL PANEL (DEBIAN) SPECIFIC COMMANDS
+# ===============================================
 
-k3s-status: ## 🟢 CURRENT POD STATUS (K3s):
+status: ## 🟢 CURRENT POD STATUS (K3s):
 	@echo "🟢 CURRENT POD STATUS (K3s):"
 	@kubectl get pods -A
 
-k3s-events: ## ⚠️  Show recent cluster events sorted by time (K3s)
+events: ## ⚠️  Show recent cluster events sorted by time (K3s)
 	@echo "⚠️  RECENT CLUSTER EVENTS (K3s):"
 	@kubectl get events --sort-by=".metadata.creationTimestamp" -A | tail -n 30
 
-k3s-ks: ## Verify all sync stages are Ready (K3s)
+ks: ## Verify all sync stages are Ready (K3s)
 	@flux get kustomizations
 
-k3s-sync: ## Force Flux to reconcile (K3s)
+sync: ## Force Flux to reconcile (K3s)
 	@echo "🔄 Forcing Flux to synchronize Git..."
 	@flux reconcile source git equity-trading-system -n flux-system
 	@echo "🔄 Syncing Kustomizations..."
@@ -23,7 +23,7 @@ k3s-sync: ## Force Flux to reconcile (K3s)
 	@flux reconcile kustomization 2-data --with-source || true
 	@flux reconcile kustomization 3-apps --with-source || true
 
-k3s-logs: ## 📜 Stream logs for a specific pod (K3s)
+logs: ## 📜 Stream logs for a specific pod (K3s)
 	@if [ -z "$(POD)" ] && [ -z "$(APP)" ]; then \
 		echo "❌ Please specify an app or pod. Example: make k3s-logs APP=fastapi"; \
 	elif [ -n "$(APP)" ]; then \
@@ -32,7 +32,7 @@ k3s-logs: ## 📜 Stream logs for a specific pod (K3s)
 		kubectl logs -f $(POD); \
 	fi
 
-k3s-db-backup: ## 💾 Take a snapshot of the trading DB and save to current directory (K3s)
+db-backup: ## 💾 Take a snapshot of the trading DB and save to current directory (K3s)
 	@echo "============================================="
 	@echo "    💾 DATABASE BACKUP MENU (K3s)"
 	@echo "============================================="
@@ -65,7 +65,7 @@ k3s-db-backup: ## 💾 Take a snapshot of the trading DB and save to current dir
 	kubectl cp data/$$POD:/dev/shm/dump.tmp "./$$bname.dump"; \
 	echo "✅ Backup successfully saved to ./$$bname.dump!"
 
-k3s-db-restore: ## ⚠️ RESTORE snapshot to the trading DB (Destructive) (K3s)
+db-restore: ## ⚠️ RESTORE snapshot to the trading DB (Destructive) (K3s)
 	@echo "============================================="
 	@echo "    ⚠️  DATABASE RESTORE MENU (K3s)"
 	@echo "============================================="
@@ -108,7 +108,7 @@ k3s-db-restore: ## ⚠️ RESTORE snapshot to the trading DB (Destructive) (K3s)
 		fi; \
 	done
 
-k3s-db-clear: ## ⚠️ WIPE the entire trading database (Destructive) (K3s)
+db-clear: ## ⚠️ WIPE the entire trading database (Destructive) (K3s)
 	@echo "============================================="
 	@echo "    ⚠️  DATABASE WIPE MENU (K3s)"
 	@echo "============================================="

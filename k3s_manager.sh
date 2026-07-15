@@ -248,9 +248,7 @@ setup_make_toolbox() {
     read -p "Branch or tag to fetch Makefiles from [main]: " input_ref
     REF="${input_ref:-main}"
 
-    mkdir -p ~/make
-    curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}/Makefile" -o ~/Makefile
-    curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}/make/k3s.mk" -o ~/make/k3s.mk
+    curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}/make/k3s.mk" -o ~/Makefile
     
     echo "✅ Make commands imported successfully. Run 'make help' to see available commands."
 }

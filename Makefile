@@ -13,7 +13,6 @@ export HOST_ROOT
 -include make/debug.mk
 -include make/chaos.mk
 -include make/logs.mk
--include make/k3s.mk
 
 # ==========================================
 # 🆘 HELP MENU
