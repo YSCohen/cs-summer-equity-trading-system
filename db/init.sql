@@ -54,6 +54,11 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ
 );
 
+CREATE TABLE username (
+    username TEXT PRIMARY KEY,
+    user_id  UUID -- users
+);
+
 -- STAGING TABLES (ignore)
 
 CREATE UNLOGGED TABLE positions_sync_stage (
@@ -83,6 +88,11 @@ CREATE UNLOGGED TABLE users_sync_stage (
     accounts_associated UUID[], -- accounts
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
+);
+
+CREATE UNLOGGED TABLE username_sync_stage (
+    username TEXT PRIMARY KEY,
+    user_id  UUID -- users
 );
 
 -- Ensure trade_admin has full access (CNPG does not make the app user a superuser)
