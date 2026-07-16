@@ -3,34 +3,30 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 images:
-  - name: api-image
-    newName: ghcr.io/sm26-industrial-software-dev/api
-    newTag: latest
-  - name: trade-writer-image
-    newName: ghcr.io/sm26-industrial-software-dev/trade-writer:latest
   - name: db-syncer-image
     newName: ghcr.io/sm26-industrial-software-dev/db-syncer:latest
-  - name: web-ui-image
-    newName: ghcr.io/sm26-industrial-software-dev/web-ui:latest
+  - name: api-image
+    newName: ghcr.io/sm26-industrial-software-dev/api
   - name: price-cacher-image
     newName: ghcr.io/sm26-industrial-software-dev/price-cacher:latest
   - name: redis-populator-image
     newName: ghcr.io/sm26-industrial-software-dev/redis-populator:latest
-  # - name: price-timeseries-cacher-image
-  #   newName: ghcr.io/sm26-industrial-software-dev/price-timeseries-cacher:latest
+  - name: web-ui-image
+    newName: ghcr.io/sm26-industrial-software-dev/web-ui:latest
+  - name: trade-writer-image
+    newName: ghcr.io/sm26-industrial-software-dev/trade-writer:latest
 
 resources:
+  - adminer
+  - db-syncer
   - error-pages
   - fastapi
   - locust
-  - streamlit
-  - trade-writer
-  - db-syncer
-  - adminer
-  - redisinsight
   - price-cacher
+  - trade-writer
   - redis-populator
-  # - price-timeseries-cacher
+  - redisinsight
+  - streamlit
 
 configMapGenerator:
   - name: db-routing

@@ -11,8 +11,8 @@ data:
     if (!isset($_GET['username'])) {
         $_POST['auth']['driver'] = 'pgsql';
         $_POST['auth']['server'] = getenv('PG_RO_HOST');
-        $_POST['auth']['username'] = getenv('POSTGRES_USER');
-        $_POST['auth']['password'] = getenv('POSTGRES_PASSWORD');
+        $_POST['auth']['username'] = getenv('username');
+        $_POST['auth']['password'] = getenv('password');
         $_POST['auth']['db'] = 'trading';
     }
 

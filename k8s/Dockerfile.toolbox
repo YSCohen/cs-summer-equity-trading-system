@@ -17,10 +17,7 @@ RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/s
     && chmod 700 get_helm.sh \
     && DESIRED_VERSION=v4.2.2 ./get_helm.sh
 
-# Install Flux 
 COPY --from=ghcr.io/fluxcd/flux-cli:v2.7.0 /usr/local/bin/flux /usr/local/bin/flux
-
-# Set the working directory to match the mount we'll create in compose
 WORKDIR /workspace
 
 # Keep the container running in the background so we can send commands to it

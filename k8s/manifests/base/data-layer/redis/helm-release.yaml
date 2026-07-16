@@ -64,11 +64,11 @@ spec:
         size: 2Gi
       resources:
         requests:
-          cpu: 50m
-          memory: 64Mi
-        limits:
-          cpu: 250m
+          cpu: 500m
           memory: 256Mi
+        limits:
+          cpu: 1000m
+          memory: 512Mi
 
     replica:
       replicaCount: 3
@@ -90,8 +90,8 @@ spec:
         size: 2Gi
       resources:
         requests:
-          cpu: 50m
-          memory: 64Mi
-        limits:
-          cpu: 250m
+          cpu: 500m
           memory: 256Mi
+        limits:
+          cpu: 1000m
+          memory: 512Mi

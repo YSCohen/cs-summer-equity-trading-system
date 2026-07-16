@@ -31,12 +31,12 @@ spec:
                   valueFrom:
                     secretKeyRef:
                       name: db-credentials
-                      key: POSTGRES_USER
+                      key: username
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
                       name: db-credentials
-                      key: POSTGRES_PASSWORD
+                      key: password
                 - name: PG_ROUTING_HOST
                   valueFrom:
                     configMapKeyRef:

@@ -13,7 +13,6 @@ spec:
       prometheus.io/port: "9187"
       prometheus.io/path: "/metrics"
 
-  # Ensures replicas are never scheduled on the same host in K3s
   affinity:
     enablePodAntiAffinity: true
     topologyKey: kubernetes.io/hostname
@@ -29,7 +28,7 @@ spec:
 
   postgresql:
     parameters:
-      max_connections: "200" # Increased to support Session pooling
+      max_connections: "200"
       shared_buffers: "128MB"
       log_checkpoints: "off"
       log_statement: "mod"

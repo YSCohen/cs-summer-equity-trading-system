@@ -3,7 +3,6 @@ apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: trade-writer-scaler
-  namespace: backend
 spec:
   scaleTargetRef:
     name: trade-writer

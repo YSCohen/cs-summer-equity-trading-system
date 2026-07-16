@@ -7,52 +7,51 @@ metadata:
     app: error-page
 data:
   index.html: |
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>404 - Not Found</title>
-            <style>
-                body {
-                    background-color: black;
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    margin: 0;
-                    color: #aaaaaa;
-                    font-family: sans-serif;
-                }
-                img {
-                    max-width: 100%;
-                    max-height: 80vh;
-                }
-                .attribution {
-                    position: absolute;
-                    bottom: 10px;
-                    right: 10px;
-                    font-size: 0.7em;
-                    text-align: right;
-                }
-                a {
-                    color: #88ccff;
-                    text-decoration: none;
-                }
-                a:hover {
-                    text-decoration: underline;
-                }
-            </style>
-        </head>
-        <body>
-            <img src="https://imgs.xkcd.com/comics/not_available.png" alt="xkcd Not Available">
-            
-            <div class="attribution">
-                Comic by <a href="https://xkcd.com/" target="_blank" rel="noopener noreferrer">xkcd.com</a>.<br/>
-                Licensed under a <a href="https://creativecommons.org/licenses/by-nc/2.5/" target="_blank" rel="noopener noreferrer">CC BY-NC 2.5</a>.
-            </div>
-        </body>
-        </html>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>404 - Not Found</title>
+        <style>
+            body {
+                background-color: black;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                color: #aaaaaa;
+                font-family: sans-serif;
+            }
+            img {
+                max-width: 100%;
+                max-height: 80vh;
+            }
+            .attribution {
+                position: absolute;
+                bottom: 10px;
+                right: 10px;
+                font-size: 0.7em;
+                text-align: right;
+            }
+            a {
+                color: #88ccff;
+                text-decoration: none;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <img src="https://imgs.xkcd.com/comics/not_available.png" alt="xkcd Not Available">
+        <div class="attribution">
+            Comic by <a href="https://xkcd.com/" target="_blank" rel="noopener noreferrer">xkcd.com</a>.<br/>
+            Licensed under a <a href="https://creativecommons.org/licenses/by-nc/2.5/" target="_blank" rel="noopener noreferrer">CC BY-NC 2.5</a>.
+        </div>
+    </body>
+    </html>
   default.conf: |
     server {
         listen 8080;

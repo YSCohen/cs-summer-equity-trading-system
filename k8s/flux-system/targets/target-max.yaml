@@ -32,7 +32,7 @@ spec:
   dependsOn:
     - name: 1-infra
   interval: 5m
-  retryInterval: 30s   
+  retryInterval: 30s
   path: ./k8s/manifests/overlays/dev-max/data-layer
   prune: true
   sourceRef:

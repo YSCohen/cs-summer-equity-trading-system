@@ -5,9 +5,6 @@ metadata:
   name: keda
 spec:
   interval: 10m
-  # dependsOn:
-  #   - name: loki-stack
-  #     namespace: monitoring
   targetNamespace: keda
   chart:
     spec:
@@ -15,7 +12,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: keda
-      version: "2.20.x" # Pin to a stable version
+      version: "2.20.x" 
   install:
     createNamespace: true
     crds: CreateReplace
