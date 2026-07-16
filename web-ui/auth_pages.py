@@ -1,7 +1,7 @@
 import streamlit as st
 
 from api_client import login, register
-from persistent_login import remember_login
+import auth_state
 
 
 def render_auth_sidebar():
@@ -23,20 +23,14 @@ def render_login_page():
     if submitted:
         result = login(username, password)
         if result["status"] == "success":
-            # Defensive: clear any leftover state from a previous user on
-            # this same browser tab (belt-and-suspenders alongside the
-            # clears in the logout button and the 401 auto-logout path --
-            # see app_ui.py / api_client.py) before setting the new
-            # session's username, so we never render stale trade data.
-            st.session_state.clear()
-            st.session_state.username = username
-            st.session_state.saved_session_cookie = result["session_cookie"]
-            st.query_params["remember_user"] = username
-            st.query_params["remember_session"] = result["session_cookie"]
-            remember_login(username, result["session_cookie"])
+            auth_state.remember_login(username, result["session_cookie"])
+            st.session_state.redirect_to = "pages/my_accounts.py"
             st.rerun()
         else:
             st.error(result.get("message", "Login failed"))
+
+    st.caption("Don't have an account?")
+    st.page_link("pages/register.py", label="Register here")
 
 
 def render_register_page():
@@ -48,23 +42,16 @@ def render_register_page():
     if submitted:
         result = register(username, password)
         if result["status"] == "success":
-            # Auto-login with the same credentials, then drop the user
-            # straight into the main app instead of back at the login page.
             login_result = login(username, password)
             if login_result["status"] == "success":
-                # Same defensive clear as render_login_page() -- see there.
-                st.session_state.clear()
-                st.session_state.username = username
-                st.session_state.saved_session_cookie = login_result["session_cookie"]
-                st.query_params["remember_user"] = username
-                st.query_params["remember_session"] = login_result["session_cookie"]
-                remember_login(username, login_result["session_cookie"])
-                st.success(f"Account created for {result['username']}. Logging you in...")
+                auth_state.remember_login(username, login_result["session_cookie"])
+                st.session_state.redirect_to = "pages/my_accounts.py"
                 st.rerun()
             else:
-                # Account was created but auto-login failed for some reason --
-                # fall back to telling the user to log in manually.
                 st.success(f"Account created for {result['username']}. You can now log in.")
                 st.error(login_result.get("message", "Auto-login failed."))
         else:
             st.error(result["message"])
+
+    st.caption("Already have an account?")
+    st.page_link("pages/login.py", label="Log in here")

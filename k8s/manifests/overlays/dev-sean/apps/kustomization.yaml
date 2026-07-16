@@ -4,14 +4,6 @@ kind: Kustomization
 resources:
   - ../../../base/apps
 
-images:
-  # - name: ghcr.io/sm26-industrial-software-dev/db-syncer
-  #   newTag: dev
-  # - name: ghcr.io/sm26-industrial-software-dev/trade-writer
-  #   newTag: dev
-  # - name: ghcr.io/sm26-industrial-software-dev/price-cacher
-  #   newTag: dev
-
 patches:
   - target:
       kind: Deployment
@@ -29,3 +21,19 @@ patches:
                 env:
                   - name: ENVIRONMENT
                     value: "dev-sean"
+  - target:
+      kind: Deployment
+      name: streamlit
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: streamlit
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: streamlit
+                image: web-ui-image:dev-sean
+                imagePullPolicy: IfNotPresent

@@ -17,32 +17,39 @@ def _accounts_list_fragment():
     if not accounts:
         st.info("You don't have any accounts yet. Create one to get started.")
         if st.button("➕ Open New Account", key="empty_state_create_account"):
-            st.session_state.jump_to_create_account_page = True
-            st.rerun(scope="app")
+            st.session_state.redirect_to = "pages/create_account.py"
+            st.rerun()
     else:
         for name, account_id in accounts.items():
             display_name = name or "(unnamed account)"
             with st.container(border=True):
-                cols = st.columns([3, 1, 1])
+                cols = st.columns([3, 2, 2, 2])
                 cols[0].write(f"**{display_name}**")
                 cols[0].caption(f"`{account_id}`")
-                if cols[1].button("View Positions →", key=f"acct_{account_id}"):
+                if cols[1].button("📊 View Positions", key=f"acct_{account_id}"):
                     st.session_state.jump_to_account = account_id
-                    st.rerun(scope="app")
-                if cols[2].button("💸 Book a Trade", key=f"acct_trade_{account_id}"):
+                    st.session_state.redirect_to = "pages/all_positions.py"
+                    st.rerun()
+                if cols[2].button("📜 View Trades", key=f"acct_view_trade_{account_id}"):
+                    st.session_state.jump_to_trades_account = account_id
+                    st.session_state.redirect_to = "pages/all_trades.py"
+                    st.rerun()
+                if cols[3].button("💸 Book a Trade", key=f"acct_trade_{account_id}"):
                     st.session_state.jump_to_trade_account = account_id
-                    st.session_state.jump_to_trade_page = True
-                    st.rerun(scope="app")
+                    st.session_state.redirect_to = "pages/enter_trade.py"
+                    st.rerun()
 
 
 def render_my_accounts_page():
-    st.header("🏦 My Accounts")
-    st.warning("TEST MARKER — latest version as of 12:37 PM 7/14 (remove before ship)")
+    st.header("🏦 My Accounts", anchor=False)
+    if st.button("🚀 Mass Booking"):
+        st.session_state.redirect_to = "pages/mass_trade.py"
+        st.rerun()
     _accounts_list_fragment()
 
 
 def render_create_account_page():
-    st.header("➕ Open a New Account")
+    st.header("➕ Open a New Account", anchor=False)
     st.caption("POST /users/account")
 
     with st.form("create_account_form"):
@@ -65,7 +72,7 @@ def render_create_account_page():
 
 
 def render_update_account_page():
-    st.header("✏️ Edit Account Settings")
+    st.header("✏️ Edit Account Settings", anchor=False)
     st.caption("PATCH /users/update_account_details/{account_id}")
 
     account_id = account_select()

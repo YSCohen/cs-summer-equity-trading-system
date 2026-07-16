@@ -5,7 +5,7 @@ from account_picker import account_select
 
 
 def render_enter_trade_page():
-    st.header("💸 Book a Trade")
+    st.header("💸 Book a Trade", anchor=False)
     st.caption("POST /trade")
 
     # Initialize trade queue and review mode in session state
@@ -52,7 +52,7 @@ def _render_review_step():
         _render_post_submission_state()
         return
 
-    st.subheader("Review Trades")
+    st.subheader("Review Trades", anchor=False)
 
     for i, trade in enumerate(st.session_state.trade_queue):
         _trade_row(trade, "review", i)
@@ -150,80 +150,81 @@ def _render_builder_step():
         (i, t) for i, t in enumerate(st.session_state.trade_queue) if i != editing_index
     ]
     if other_trades:
-        st.subheader("Queued Trades")
+        st.subheader("Queued Trades", anchor=False)
         for i, trade in other_trades:
             _trade_row(trade, "queue", i)
         st.divider()
 
     # Add / Edit trade form
-    st.subheader("Edit Trade" if editing_trade else "Add Trade")
+    st.subheader("Edit Trade" if editing_trade else "Add Trade", anchor=False)
 
-    prefilled_account = st.session_state.pop("jump_to_trade_account", None)
-    preselect = editing_trade["account_id"] if editing_trade else prefilled_account
-    account_id = account_select(preselect_account_id=preselect, key="enter_trade_account_select")
+    with st.form("trade_builder_form"):
+        prefilled_account = st.session_state.pop("jump_to_trade_account", None)
+        preselect = editing_trade["account_id"] if editing_trade else prefilled_account
+        account_id = account_select(preselect_account_id=preselect, key="enter_trade_account_select")
 
-    ticker = st.text_input("Ticker", value=editing_trade["ticker"] if editing_trade else "")
-    direction_is_sell = st.toggle(
-        "Sell (off = Buy)",
-        value=(editing_trade["direction"] == "Sell") if editing_trade else False,
-    )
-    direction = "Sell" if direction_is_sell else "Buy"
-    st.caption(f"Direction: **{direction}**")
-    quantity = st.number_input(
-        "Quantity", min_value=1, step=1,
-        value=int(editing_trade["quantity"]) if editing_trade else 1,
-    )
-    price = st.number_input(
-        "Price", min_value=0.01,
-        value=float(editing_trade["price"]) if editing_trade else 0.01,
-    )
-    other_account = st.text_input(
-        "Other Account (optional)",
-        value=(editing_trade.get("other_account") or "") if editing_trade else "",
-    )
+        ticker = st.text_input("Ticker", value=editing_trade["ticker"] if editing_trade else "")
+        direction = st.segmented_control(
+            "Direction",
+            options=["Buy", "Sell"],
+            default=(editing_trade["direction"] if editing_trade else "Buy"),
+        )
+        if not direction:
+            direction = "Buy"
+        quantity = st.number_input(
+            "Quantity", min_value=1, step=1,
+            value=int(editing_trade["quantity"]) if editing_trade else 1,
+        )
+        price = st.number_input(
+            "Price", min_value=0.01,
+            value=float(editing_trade["price"]) if editing_trade else 0.01,
+        )
+        other_account = st.text_input(
+            "Other Account (optional)",
+            value=(editing_trade.get("other_account") or "") if editing_trade else "",
+        )
 
-    def _build_trade():
-        return {
-            "account_id": account_id,
-            "ticker": ticker.upper(),
-            "direction": direction,
-            "quantity": int(quantity),
-            "price": str(price),  # backend expects price as a string
-            "other_account": other_account or None,
-        }
+        def _build_trade():
+            return {
+                "account_id": account_id,
+                "ticker": ticker.upper(),
+                "direction": direction,
+                "quantity": int(quantity),
+                "price": str(price),  # backend expects price as a string
+                "other_account": other_account or None,
+            }
 
-    if editing_trade:
-        col_save, col_cancel = st.columns([1, 1])
-        if col_save.button("💾 Save Changes", type="primary"):
-            if not account_id or not ticker:
-                st.error("Account and Ticker are required.")
-            else:
-                st.session_state.trade_queue[editing_index] = _build_trade()
+        if editing_trade:
+            col_save, col_cancel = st.columns([1, 1])
+            save_clicked = col_save.form_submit_button("💾 Save Changes", type="primary")
+            cancel_clicked = col_cancel.form_submit_button("Cancel")
+            
+            if save_clicked:
+                if not account_id or not ticker:
+                    st.error("Account and Ticker are required.")
+                else:
+                    st.session_state.trade_queue[editing_index] = _build_trade()
+                    st.session_state.editing_trade_index = None
+                    st.rerun()
+            if cancel_clicked:
                 st.session_state.editing_trade_index = None
                 st.rerun()
-        if col_cancel.button("Cancel"):
-            st.session_state.editing_trade_index = None
-            st.rerun()
-    else:
-        col_add, col_review = st.columns([1, 1])
+        else:
+            col_add, col_review = st.columns([1, 1])
+            add_clicked = col_add.form_submit_button("＋ Add Trade")
+            review_clicked = col_review.form_submit_button("Review & Submit →", type="primary")
 
-        if col_add.button("＋ Add Trade"):
-            if not account_id or not ticker:
-                st.error("Account and Ticker are required.")
-            else:
-                st.session_state.trade_queue.append(_build_trade())
-                st.session_state.last_added_trade = _build_trade()
+            if add_clicked:
+                if not account_id or not ticker:
+                    st.error("Account and Ticker are required.")
+                else:
+                    st.session_state.trade_queue.append(_build_trade())
+                    st.session_state.last_added_trade = _build_trade()
+                    st.rerun()
+
+            if review_clicked:
+                current = _build_trade() if (account_id and ticker) else None
+                if current is not None and current != st.session_state.get("last_added_trade"):
+                    st.session_state.trade_queue.append(current)
+                st.session_state.reviewing = True
                 st.rerun()
-
-        if col_review.button(
-            "Review & Submit →",
-            type="primary",
-            disabled=len(st.session_state.trade_queue) == 0 and (not account_id or not ticker),
-        ):
-            # If the current form holds a trade that hasn't already
-            # been added to the queue (via "+ Add Trade"), add it now.
-            current = _build_trade() if (account_id and ticker) else None
-            if current is not None and current != st.session_state.get("last_added_trade"):
-                st.session_state.trade_queue.append(current)
-            st.session_state.reviewing = True
-            st.rerun()

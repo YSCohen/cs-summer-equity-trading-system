@@ -67,11 +67,12 @@ def _all_trades_fragment():
 
 
 def render_all_trades_page():
-    st.header("📜 Trade History")
+    st.header("📜 Trades", anchor=False)
     st.caption("GET /trades")
     col1, col2 = st.columns(2)
+    prefilled = st.session_state.pop("jump_to_trades_account", None)
     with col1:
-        account_id = account_select(label="Account (optional)", key="trades_page_filter_account")
+        account_id = account_select(label="Account (optional)", key="trades_page_filter_account", preselect_account_id=prefilled)
     with col2:
         ticker = st.text_input("Ticker (optional)", key="trades_page_filter_ticker").strip().upper() or None
     col3, col4 = st.columns(2)
@@ -92,57 +93,7 @@ def render_all_trades_page():
     _all_trades_fragment()
 
 
-@st.fragment(run_every="15s")
-def _trades_by_account_fragment(account_id):
-    _render_trades_table(get_trades_by_account(account_id))
 
-
-def render_trades_by_account_page():
-    st.header("📜 Trade History by Account")
-    st.caption("GET /trades?account_id={account_id}")
-
-    account_id = account_select()
-
-    # Auto-loads (and keeps polling) as soon as an account is selected.
-    if account_id:
-        _trades_by_account_fragment(account_id)
-
-
-@st.fragment(run_every="15s")
-def _trades_by_ticker_fragment(ticker):
-    _render_trades_table(get_trades_by_ticker(ticker))
-
-
-def render_trades_by_ticker_page():
-    st.header("📜 Trade History by Ticker")
-    st.caption("GET /trades?ticker={ticker}")
-
-    with st.form("trades_by_ticker_form"):
-        ticker = st.text_input("Ticker", "AAPL")
-        submitted = st.form_submit_button("Load Trades")
-
-    if submitted:
-        st.session_state.trades_by_ticker_query = ticker.upper()
-
-    query = st.session_state.get("trades_by_ticker_query")
-    if query:
-        _trades_by_ticker_fragment(query)
-
-
-@st.fragment(run_every="15s")
-def _trades_by_account_and_ticker_fragment(account_id, ticker):
-    _render_trades_table(get_trades_by_account_and_ticker(account_id, ticker))
-
-
-def render_trades_by_account_and_ticker_page():
-    st.header("📜 Trade History by Account & Ticker")
-    st.caption("GET /trades?account_id={account_id}&ticker={ticker}")
-
-    account_id = account_select(key="trades_acct_ticker_select")
-    ticker = st.text_input("Ticker", "AAPL")
-
-    if account_id and ticker:
-        _trades_by_account_and_ticker_fragment(account_id, ticker.upper())
 
 
 @st.fragment(run_every="15s")
@@ -161,7 +112,7 @@ def _trade_by_id_fragment(trade_id):
 
 
 def render_trade_by_id_page():
-    st.header("🔍 Look Up Trade by ID")
+    st.header("🔍 Look Up Trade by ID", anchor=False)
     st.caption("GET /trade/{trade_id}")
 
     with st.form("trade_by_id_form"):
@@ -177,7 +128,7 @@ def render_trade_by_id_page():
 
 
 def render_update_trade_page():
-    st.header("✏️ Edit Trade")
+    st.header("✏️ Edit Trade", anchor=False)
     st.caption("PATCH /edit_trade/{trade_id}")
 
     with st.form("load_trade_for_edit_form"):
@@ -208,11 +159,13 @@ def render_update_trade_page():
             key="update_trade_account_select",
         )
         ticker = st.text_input("Ticker", value=loaded.get("symbol_ticker", ""))
-        direction_is_sell = st.toggle(
-            "Sell (off = Buy)", value=(loaded.get("direction") == "Sell")
+        direction = st.segmented_control(
+            "Direction",
+            options=["Buy", "Sell"],
+            default=loaded.get("direction", "Buy"),
         )
-        direction = "Sell" if direction_is_sell else "Buy"
-        st.caption(f"Direction: **{direction}**")
+        if not direction:
+            direction = "Buy"
         quantity = st.number_input(
             "Quantity", min_value=1, step=1, value=int(loaded.get("quantity", 1))
         )

@@ -86,6 +86,7 @@ def render_positions_grid(rows, empty_message="No positions found.", key="positi
     gb.configure_grid_options(enableCellTextSelection=True, ensureDomOrder=True)
     grid_options = gb.build()
 
+    print("AG-Grid loading for positions...")
     AgGrid(
         df,
         gridOptions=grid_options,
@@ -100,6 +101,7 @@ def render_positions_grid(rows, empty_message="No positions found.", key="positi
         reload_data=False,
         key=key,
     )
+    print("AG-Grid loaded for positions.")
 
     # Force a rerun on first load so AgGrid JS has time to initialize.
     # Without this the grid renders blank on first visit and only appears

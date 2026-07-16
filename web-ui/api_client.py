@@ -1,58 +1,49 @@
 import os
 import requests
 import streamlit as st
+import auth_state
+
+from urllib.parse import urlparse
 
 API_BASE_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
+API_DOMAIN = urlparse(API_BASE_URL).hostname
 
 CONNECTION_ERROR_MESSAGE = (
     "Could not reach the backend. It may be down, still starting up, "
     "or there may be a network issue -- try again in a moment."
 )
 
-
 def _get_session():
     if "http" not in st.session_state:
-        session = requests.Session()
-        saved_cookie = st.session_state.get("saved_session_cookie")
-        if saved_cookie:
-            session.cookies.set("session", saved_cookie)
-        st.session_state.http = session
+        st.session_state.http = requests.Session()
     return st.session_state.http
 
 
 def _safe_call(fn, *args, **kwargs):
-    """Wraps a requests call (session.get/post/patch) so an unreachable
-    backend (down, still starting, DNS hiccup, connection refused, etc.)
-    shows a friendly Streamlit error instead of crashing the whole page
-    with a raw Python traceback -- which is what a bare requests.exceptions.
-    ConnectionError does today if it's allowed to propagate out of a
-    Streamlit script.
+    saved_cookie = auth_state.get_session_cookie()
+    if saved_cookie:
+        # Safely copy or create headers dict to avoid mutating shared state
+        headers = dict(kwargs.get("headers") or {})
+        headers["Cookie"] = f"session={saved_cookie}"
+        kwargs["headers"] = headers
 
-    Returns the Response on success, or None on any connection-level
-    failure. Every call site below checks for None before touching
-    response.status_code/json()."""
     try:
         return fn(*args, **kwargs)
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as e:
+        # A failed request here means we couldn't reach the backend --
+        # it says nothing about whether the session/cookie is valid, so
+        # don't forget_login()/clear session state over it. That was
+        # wiping perfectly good sessions on a hard reload whenever the
+        # backend was briefly slow or restarting. An actually invalid
+        # session is caught separately, via a real 401 in _api_error().
+        st.error(f"API Error: {str(e)}")
         return None
 
-
 def _api_error(response):
-    if response.status_code == 401 and st.session_state.get("username"):
-        from persistent_login import forget_login
-        forget_login()
-
-        for key in ["remember_user", "remember_session"]:
-            if key in st.query_params:
-                del st.query_params[key]
-
-        # Same reasoning as the explicit logout button in app_ui.py: a full
-        # clear (not just username/http/nav_page) so nothing this user
-        # booked/entered is still sitting in session_state for the next
-        # person who logs in on this tab.
-        st.session_state.clear()
-
-        st.warning("Your session expired. Please log in again.")
+    if response.status_code == 401:
+        if auth_state.get_username():
+            auth_state.forget_login()
+        st.session_state.redirect_to = "pages/login.py"
         st.rerun()
 
     try:
@@ -74,13 +65,25 @@ def login(username, password):
         return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
-        session_cookie = session.cookies.get("session")
+        # Use response.cookies to get the exact cookie set by this request
+        # and avoid CookieConflictError if the session has multiple path-specific cookies
+        session_cookie = response.cookies.get("session")
+        
+        if not session_cookie:
+            try:
+                session_cookie = session.cookies.get("session")
+            except requests.cookies.CookieConflictError:
+                session_cookie = session.cookies.get("session", path="/login")
 
         if not session_cookie:
             return {
                 "status": "error",
                 "message": "Login succeeded, but no session cookie was received.",
             }
+
+        # Clear path-specific cookies and set globally so all API endpoints can use it
+        session.cookies.clear()
+        session.cookies.set("session", session_cookie)
 
         st.session_state.saved_session_cookie = session_cookie
 

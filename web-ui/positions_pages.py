@@ -94,7 +94,7 @@ def _render_positions_result(result, empty_message="No positions found.", accoun
 
         positions = value
         account_label = get_account_name(key)
-        st.subheader(account_label)
+        st.subheader(account_label, anchor=False)
 
         for position in positions:
             _position_card(position, account_id=key)
@@ -126,11 +126,12 @@ def _all_positions_fragment():
 
 
 def render_all_positions_page():
-    st.header("📊 All Positions")
+    st.header("📊 Positions", anchor=False)
     st.caption("GET /positions")
     col1, col2 = st.columns(2)
+    prefilled = st.session_state.pop("jump_to_account", None)
     with col1:
-        account_id = account_select(label="Account (optional)", key="pos_page_filter_account")
+        account_id = account_select(label="Account (optional)", key="pos_page_filter_account", preselect_account_id=prefilled)
     with col2:
         ticker = st.text_input("Ticker (optional)", key="pos_page_filter_ticker").strip().upper() or None
     st.session_state["positions_account_filter"] = account_id
@@ -139,51 +140,3 @@ def render_all_positions_page():
         st.info("Select an account or enter a ticker to load positions.")
         return
     _all_positions_fragment()
-
-@st.fragment(run_every="15s")
-def _positions_by_account_fragment(account_id):
-    _render_positions_result(get_positions_by_account(account_id), account_id=account_id)
-
-
-def render_positions_by_account_page():
-    st.header("📊 Positions by Account")
-    st.caption("GET /positions/accounts/{account_id}")
-
-    prefilled = st.session_state.pop("jump_to_account", None)
-    account_id = account_select(preselect_account_id=prefilled)
-
-    if account_id:
-        _positions_by_account_fragment(account_id)
-
-
-@st.fragment(run_every="15s")
-def _positions_by_ticker_fragment(ticker):
-    _render_positions_result(get_positions_by_ticker(ticker))
-
-
-def render_positions_by_ticker_page():
-    st.header("📊 Positions by Ticker")
-    st.caption("GET /positions/ticker/{ticker}")
-
-    ticker = st.text_input("Ticker", "AAPL")
-
-    if ticker:
-        _positions_by_ticker_fragment(ticker.upper())
-
-
-@st.fragment(run_every="15s")
-def _positions_by_account_and_ticker_fragment(account_id, ticker):
-    _render_positions_result(
-        get_positions_by_account_and_ticker(account_id, ticker), account_id=account_id
-    )
-
-
-def render_positions_by_account_and_ticker_page():
-    st.header("📊 Positions by Account & Ticker")
-    st.caption("GET /positions/accounts/{account_id}/ticker/{ticker}")
-
-    account_id = account_select(key="pos_acct_ticker_select")
-    ticker = st.text_input("Ticker", "AAPL")
-
-    if account_id and ticker:
-        _positions_by_account_and_ticker_fragment(account_id, ticker.upper())

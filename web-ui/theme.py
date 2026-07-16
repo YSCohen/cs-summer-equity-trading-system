@@ -13,16 +13,8 @@ def apply_theme():
         """
         <style>
         :root {
-            --eq-blue-50:  #eef6ff;
-            --eq-blue-100: #dbeeff;
-            --eq-blue-200: #b9deff;
-            --eq-blue-400: #5aa9ea;
             --eq-blue-500: #2f86d6;
             --eq-blue-700: #1c5e9e;
-        }
-
-        .stApp {
-            background-color: var(--eq-blue-50);
         }
 
         /* Sidebar */
@@ -55,11 +47,6 @@ def apply_theme():
             border-color: rgba(255, 255, 255, 0.25);
         }
 
-        /* Main content headers */
-        h1, h2, h3 {
-            color: var(--eq-blue-700);
-        }
-
         /* Primary buttons in main content */
         .stButton button[kind="primary"] {
             background-color: var(--eq-blue-500);
@@ -69,19 +56,6 @@ def apply_theme():
         .stButton button[kind="primary"]:hover {
             background-color: var(--eq-blue-700);
             border-color: var(--eq-blue-700);
-        }
-
-        /* Cards (st.container(border=True)) */
-        div[data-testid="stVerticalBlockBorderWrapper"] {
-            border-color: var(--eq-blue-200) !important;
-            background-color: #ffffff;
-            border-radius: 10px;
-        }
-
-        /* Text inputs / number inputs -- visible borders */
-        div[data-testid="stTextInput"] input,
-        div[data-testid="stNumberInput"] input {
-            border: 1px solid var(--eq-blue-200);
         }
         </style>
         """,

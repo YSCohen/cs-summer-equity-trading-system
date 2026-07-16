@@ -34,6 +34,12 @@ ports:
 options:
   k3d:
     wait: true # Ensures the command doesn't finish until the cluster is fully ready
+  k3s:
+    extraArgs:
+      - arg: --kubelet-arg=eviction-hard=imagefs.available<5%,nodefs.available<5%
+        nodeFilters:
+          - server:*
+          - agent:*
   kubeconfig:
     updateDefaultKubeconfig: true
     switchCurrentContext: true

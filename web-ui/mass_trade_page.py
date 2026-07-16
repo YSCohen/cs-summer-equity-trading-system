@@ -146,6 +146,11 @@ def _render_preview_grid(rows: list[dict]):
         key="mass_trade_preview_grid",
     )
 
+    first_load_key = "mass_trade_preview_grid_initialized"
+    if not st.session_state.get(first_load_key):
+        st.session_state[first_load_key] = True
+        st.rerun()
+
 
 def _submit_chunk_with_cookie(chunk, cookie):
     session = requests.Session()
@@ -243,7 +248,7 @@ def _render_success_state():
 
 
 def render_mass_trade_page():
-    st.header("📋 Mass Trade Booker")
+    st.header("📋 Mass Trade Booker", anchor=False)
 
     # Once a batch has been submitted, show only the success state above
     # (with "Book More Trades" up top) until the user explicitly starts a
@@ -300,7 +305,8 @@ def render_mass_trade_page():
 
     st.divider()
     st.subheader(
-        f"Preview — {len(rows)} trades ({len(valid_rows)} valid, {len(invalid_rows)} invalid)"
+        f"Preview — {len(rows)} trades ({len(valid_rows)} valid, {len(invalid_rows)} invalid)",
+        anchor=False
     )
 
     _render_preview_grid(rows)

@@ -56,6 +56,7 @@ def render_trades_grid(rows, empty_message="No trades found.", key="trades_grid"
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_default_column(sortable=True, filter=True, resizable=True)
     gb.configure_pagination(paginationAutoPageSize=True)
+    gb.configure_grid_options(enableCellTextSelection=True)
 
     # AgGrid's date filter compares the filter's chosen date against
     # each cell value using this comparator. cellValue arrives as an
@@ -93,6 +94,7 @@ def render_trades_grid(rows, empty_message="No trades found.", key="trades_grid"
 
     grid_options = gb.build()
 
+    print("AG-Grid loading for trades...")
     AgGrid(
         df,
         gridOptions=grid_options,
@@ -118,6 +120,7 @@ def render_trades_grid(rows, empty_message="No trades found.", key="trades_grid"
         reload_data=False,
         key=key,
     )
+    print("AG-Grid loaded for trades.")
 
     # Force a rerun on first load so AgGrid JS has time to initialize.
     # Without this the grid renders blank on first visit and only appears
