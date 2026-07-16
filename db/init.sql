@@ -10,7 +10,7 @@ CREATE TABLE trades (
     updated_at TIMESTAMPTZ,
     quantity INT,
     price NUMERIC,
-    other_account UUID -- accounts
+    other_account TEXT -- username
 );
 
 CREATE INDEX idx_trades_user_created
