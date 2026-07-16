@@ -84,6 +84,12 @@ def render_positions_grid(rows, empty_message="No positions found.", key="positi
     gb.configure_default_column(sortable=True, filter=True, resizable=True)
     gb.configure_pagination(paginationAutoPageSize=True)
     gb.configure_grid_options(enableCellTextSelection=True, ensureDomOrder=True)
+
+    gb.configure_column("Account ID", width=320)
+    gb.configure_column("Ticker", width=90)
+    gb.configure_column("Quantity", width=90)
+    gb.configure_column("Price/Share", width=110)
+
     grid_options = gb.build()
 
     print("AG-Grid loading for positions...")
