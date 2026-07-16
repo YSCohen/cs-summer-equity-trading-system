@@ -4,36 +4,30 @@ kind: Simple
 metadata:
   name: dev-cluster
 
-# IaC Networking: Force K3d to join Compose's network
 network: k3d-network
 
-# IaC Networking: Write the internal Docker DNS name and port into the kubeconfig
 kubeAPI:
   host: "k3d-dev-cluster-serverlb"
   hostPort: "6443"
-
 env:
   - envVar: K3D_FIX_DNS=0
     nodeFilters:
       - "all"
-
 volumes:
-  # Mount to /tmp to avoid conflict with the system /etc/resolv.conf
   - volume: ${HOST_ROOT}/k8s/custom-resolv.conf:/tmp/custom-resolv.conf:z
     nodeFilters:
       - "server:*"
       - "agent:*"
-
 servers: 1
 agents: 2
 image: rancher/k3s:v1.36.1-k3s1
 ports:
-  - port: 8080:80 # Maps localhost:8080 to the cluster's incoming web traffic
+  - port: 8080:80
     nodeFilters:
       - loadbalancer
 options:
   k3d:
-    wait: true # Ensures the command doesn't finish until the cluster is fully ready
+    wait: true
   k3s:
     extraArgs:
       - arg: --kubelet-arg=eviction-hard=imagefs.available<5%,nodefs.available<5%

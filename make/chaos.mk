@@ -1,4 +1,4 @@
-.PHONY: chaos-kill chaos restore-all chaos-node-stop chaos-node-start chaos-kill-redis
+.PHONY: chaos-kill chaos restore-all chaos-node-stop chaos-node-start chaos-kill-redis scale-streamlit
 
 # ==========================================
 # 🌪️ CHAOS ENGINEERING (SCALE & KILL)
@@ -103,6 +103,27 @@ chaos: ## 💥 Interactive menu to scale components down to 0
 			"Exit") echo "Gracefully exiting chaos menu."; break ;; \
 		esac; \
 	done
+
+# ------------------------------------------
+# 📈 CUSTOM SCALE
+# ------------------------------------------
+scale-streamlit: ## 📈 Interactively scale the streamlit UI replica count
+	@echo "============================================="
+	@echo "    📈 EQUITY TRADING APP - SCALE UI"
+	@echo "============================================="
+	@read -p "Enter desired number of streamlit replicas: " replicas; \
+	if [ -n "$$replicas" ]; then \
+		echo "⏸️  Suspending Flux 3-apps kustomization..."; \
+		$(DOCKER) exec k8s-toolbox flux suspend kustomization 3-apps; \
+		echo "🔫 Scaling streamlit to $$replicas in namespace frontend..."; \
+		$(DOCKER) exec k8s-toolbox kubectl scale deployment streamlit -n frontend --replicas=$$replicas; \
+		echo "=========================================================="; \
+		echo "⚠️  WARNING: Flux is SUSPENDED for 3-apps."; \
+		echo "👉  Run 'make restore-all' to resume Flux and recover original state."; \
+		echo "=========================================================="; \
+	else \
+		echo "Operation cancelled."; \
+	fi
 
 # ------------------------------------------
 # 🚑 RESTORE & NODE CONTROL

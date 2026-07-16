@@ -6,5 +6,5 @@ class Trade(BaseModel):
     direction: str
     ticker: str
     quantity: int
-    price: str
+    price: float
     other_account: str | None = None

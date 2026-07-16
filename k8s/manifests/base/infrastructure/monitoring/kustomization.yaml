@@ -5,9 +5,9 @@ kind: Kustomization
 namespace: monitoring
 
 resources:
-  - loki-helm-repo.yaml
-  - loki-helm-release.yaml
   - ingress.yaml
+  - loki-helm-release.yaml
+  - loki-helm-repo.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

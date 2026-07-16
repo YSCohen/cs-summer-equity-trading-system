@@ -57,6 +57,7 @@ async def create_trade(trade: list[Trade], user_id: str = Depends(verify_cookie)
 async def get_user_trades(
     request: Request,
     user_id: str = Depends(verify_cookie),
+    filter_by_my_trades: bool | None = False,
     account_id: str | None = None,
     ticker: str | None = None,
     time_start: datetime | None = None,
@@ -70,18 +71,31 @@ async def get_user_trades(
     query = """
         SELECT *
         FROM trades
-        WHERE user_id = $1
     """
 
-    params = [user_id]
-    param = 2
+    params = []
+    param = 1
 
     if account_id is not None:
         await verify_account_access(account_id, user_id)
         query += f"""
-            AND account_id = ${param}
+            WHERE account_id = ${param}
         """
         params.append(account_id)
+        param += 1
+    else:
+        user_data = await get_user_data(user_id)
+        query += f"""
+            WHERE account_id = ANY(${param})
+        """
+        params.append(user_data["accounts_associated"])
+        param += 1
+
+    if filter_by_my_trades:
+        query += f"""
+            AND user_id = ${param}
+        """
+        params.append(user_id)
         param += 1
 
     if ticker is not None:
@@ -187,11 +201,11 @@ async def update_trade(
     )  # Ensure this account_id exists in the database
     existing_trade_dict = dict(existing_trade)
 
-    await verify_trade_details(trade.model_dump(), user_data)  # Validate trade details
-
     trade.other_account = verify_other_account(
         trade.other_account
     )  # Validate other_account
+
+    await verify_trade_details(trade.model_dump(), user_data)  # Validate trade details
 
     await edit_position(
         user_id, existing_trade_dict, trade.model_dump(), trade.other_account, trade_id

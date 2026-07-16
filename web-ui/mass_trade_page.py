@@ -122,6 +122,7 @@ def _render_preview_grid(rows: list[dict]):
     gb = GridOptionsBuilder.from_dataframe(display_df)
     gb.configure_default_column(sortable=True, resizable=True)
     gb.configure_pagination(paginationAutoPageSize=True)
+    gb.configure_grid_options(enableCellTextSelection=True)
 
     # Color rows red/green based on Status column content
     row_style = JsCode("""
@@ -196,6 +197,50 @@ def _submit_in_batches(payload):
     return {"status": "success", "data": {"successes": all_successes, "failures": all_failures}}
 
 
+def _submit_chunk_with_cookie(chunk, cookie):
+    session = requests.Session()
+    if cookie:
+        session.cookies.set("session", cookie)
+    try:
+        response = session.post(f"{API_BASE_URL}/trade", json=chunk)
+    except Exception:
+        return {"status": "error", "message": "Could not reach the backend."}
+    if response.status_code == 200:
+        return {"status": "success", "data": response.json()}
+    return {"status": "error", "message": response.text}
+
+
+BATCH_SIZE = 25
+
+
+def _submit_in_batches(payload):
+    cookie = st.session_state.get("saved_session_cookie")
+
+    chunks = []
+    for i in range(0, len(payload), BATCH_SIZE):
+        chunks.append(payload[i:i + BATCH_SIZE])
+
+    all_successes = []
+    all_failures = []
+    errors = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(_submit_chunk_with_cookie, chunk, cookie) for chunk in chunks]
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result["status"] == "success":
+                data = result["data"]
+                all_successes.extend(data.get("successes", []))
+                all_failures.extend(data.get("failures", []))
+            else:
+                errors.append(result["message"])
+
+    if errors and not all_successes and not all_failures:
+        return {"status": "error", "message": "; ".join(errors)}
+
+    return {"status": "success", "data": {"successes": all_successes, "failures": all_failures}}
+
+
 def _reset_mass_trade_state():
     """Clears everything about the last batch so the page goes back to
     a blank paste box."""
@@ -224,9 +269,43 @@ def _render_success_state():
     successes = data.get("successes", []) if isinstance(data, dict) else []
     failures = data.get("failures", []) if isinstance(data, dict) else []
 
-    if st.button("📋 Book More Trades", type="primary"):
-        _reset_mass_trade_state()
-        st.rerun()
+    with st.container(key="mass_trade_success_buttons"):
+        st.markdown(
+            """
+            <style>
+            .st-key-mass_trade_success_buttons div[data-testid="column"]:nth-child(1) button {
+                background-color: #28a745; border-color: #28a745; color: white; width: 100%;
+            }
+            .st-key-mass_trade_success_buttons div[data-testid="column"]:nth-child(1) button:hover {
+                background-color: #218838; border-color: #1e7e34;
+            }
+            .st-key-mass_trade_success_buttons div[data-testid="column"]:nth-child(2) button {
+                background-color: #007bff; border-color: #007bff; color: white; width: 100%;
+            }
+            .st-key-mass_trade_success_buttons div[data-testid="column"]:nth-child(2) button:hover {
+                background-color: #0069d9; border-color: #0062cc;
+            }
+            .st-key-mass_trade_success_buttons div[data-testid="column"]:nth-child(3) button {
+                background-color: #6f42c1; border-color: #6f42c1; color: white; width: 100%;
+            }
+            .st-key-mass_trade_success_buttons div[data-testid="column"]:nth-child(3) button:hover {
+                background-color: #5a32a3; border-color: #542c98;
+            }
+            </style>
+            """, unsafe_allow_html=True
+        )
+        col1, col2, col3, _ = st.columns([1.5, 1.5, 1.5, 7.5])
+        if col1.button("📋 Book More Trades"):
+            _reset_mass_trade_state()
+            st.rerun()
+        if col2.button("📊 View Positions"):
+            if payload and payload[0].get("account_id"):
+                st.session_state.jump_to_account = payload[0]["account_id"]
+            st.switch_page("pages/positions.py")
+        if col3.button("📜 View Trades"):
+            if payload and payload[0].get("account_id"):
+                st.session_state.jump_to_trades_account = payload[0]["account_id"]
+            st.switch_page("pages/trade_history.py")
 
     if failures:
         st.warning(
@@ -248,7 +327,7 @@ def _render_success_state():
 
 
 def render_mass_trade_page():
-    st.header("📋 Mass Trade Booker", anchor=False)
+    st.header("📋 Mass Trade", anchor=False)
 
     # Once a batch has been submitted, show only the success state above
     # (with "Book More Trades" up top) until the user explicitly starts a

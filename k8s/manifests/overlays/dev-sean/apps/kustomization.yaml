@@ -30,7 +30,6 @@ patches:
       metadata:
         name: streamlit
       spec:
-        replicas: 1
         template:
           spec:
             containers:

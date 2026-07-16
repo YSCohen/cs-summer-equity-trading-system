@@ -3,6 +3,9 @@ apiVersion: v1
 kind: Service
 metadata:
   name: streamlit-svc
+  annotations:
+    traefik.ingress.kubernetes.io/service.sticky.cookie: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.name: "streamlit-affinity"
 spec:
   type: ClusterIP
   selector:

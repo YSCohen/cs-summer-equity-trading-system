@@ -7,12 +7,3 @@ resources:
 
 patches:
   - path: monitoring-ingress-overwrite.yaml
-  # - target:
-  #     kind: HelmRelease
-  #     name: "^(cnpg|keda)$"
-  #   patch: |-
-  #     - op: add
-  #       path: /spec/dependsOn
-  #       value:
-  #         - name: loki-stack
-  #           namespace: monitoring

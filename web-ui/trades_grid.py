@@ -92,6 +92,12 @@ def render_trades_grid(rows, empty_message="No trades found.", key="trades_grid"
     )
     gb.configure_grid_options(enableCellTextSelection=True, ensureDomOrder=True)
 
+    gb.configure_column("Ticker", width=90)
+    gb.configure_column("Direction", width=90)
+    gb.configure_column("Quantity", width=90)
+    gb.configure_column("Price", width=90)
+    gb.configure_column("Trade ID", width=320)
+
     grid_options = gb.build()
 
     print("AG-Grid loading for trades...")

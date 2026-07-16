@@ -90,6 +90,10 @@ async def get_all_users_positions(user_id: str):
                 "latest_price": market["latest_price"],
                 "open_price": market["open_price"],
                 "position_value": position["quantity"] * market["latest_price"],
+                "average_cost": position["average_cost"],
+                "realized_pnl": position["total_realized_gains"],
+                "unrealized_pnl": (market["latest_price"] - position["average_cost"])
+                * position["quantity"],
                 "created_at": position["created_at"],
                 "updated_at": position["updated_at"],
             }
@@ -160,6 +164,10 @@ async def get_all_accounts_positions(account_id: str, user_id: str):
             "latest_price": market["latest_price"],
             "open_price": market["open_price"],
             "position_value": x_positions["quantity"] * market["latest_price"],
+            "average_cost": position["average_cost"],
+            "realized_pnl": position["total_realized_gains"],
+            "unrealized_pnl": (market["latest_price"] - position["average_cost"])
+            * position["quantity"],
             "created_at": x_positions["created_at"],
             "updated_at": x_positions["updated_at"],
         }
@@ -220,6 +228,13 @@ async def get_all_users_ticker_positions(ticker: str, user_id: str):
                     "open_price": real_symbol_data["open_price"],
                     "position_value": real_position_data["quantity"]
                     * real_symbol_data["latest_price"],
+                    "average_cost": real_position_data["average_cost"],
+                    "realized_pnl": real_position_data["total_realized_gains"],
+                    "unrealized_pnl": (
+                        real_symbol_data["latest_price"]
+                        - real_position_data["average_cost"]
+                    )
+                    * real_position_data["quantity"],
                     "created_at": real_position_data["created_at"],
                     "updated_at": real_position_data["updated_at"],
                 }
@@ -268,6 +283,12 @@ async def get_account_ticker_position(ticker: str, account_id: str, user_id: str
                 "open_price": real_symbol_data["open_price"],
                 "position_value": x_positions["quantity"]
                 * real_symbol_data["latest_price"],
+                "average_cost": x_positions["average_cost"],
+                "realized_pnl": x_positions["total_realized_gains"],
+                "unrealized_pnl": (
+                    real_symbol_data["latest_price"] - x_positions["average_cost"]
+                )
+                * x_positions["quantity"],
             }
             break  # only one account and one ticker
     return positions
@@ -317,7 +338,11 @@ async def edit_position(
     try:
         # Acquire every lock
         for lock in locks:
-            await lock.acquire()
+            acquired = await lock.acquire()
+            if not acquired:
+                raise HTTPException(
+                    status_code=409, detail="Could not acquire required locks."
+                )
             acquired_locks.append(lock)
 
         writes = []
@@ -348,6 +373,7 @@ async def edit_position(
             new_trade,
             trade_id,
             datetime.now(timezone.utc),
+            existing_trade["created_at"],
             other_account,
             user_id,
         )
@@ -359,7 +385,10 @@ async def edit_position(
     finally:
         # Always release, even if something throws
         for lock in reversed(acquired_locks):
-            await lock.release()
+            try:
+                await lock.release()
+            except Exception:
+                logger.error("Failed to release Redis lock")
 
 
 async def update_position_data(

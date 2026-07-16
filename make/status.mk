@@ -1,4 +1,4 @@
-.PHONY: ks events status status-wide status-svc check-sync sync status-images
+.PHONY: ks events status status-wide status-svc check-sync sync status-images watch-frontend
 
 # ==========================================
 # 📊 CLUSTER STATUS
@@ -17,6 +17,10 @@ status: ## 🟢 Show current pod status across all namespaces
 status-wide: ## 🌐 Show pod status with node/IP details
 	@echo "🌐 WIDE POD OVERVIEW:"
 	@$(DOCKER) exec k8s-toolbox kubectl get pods -A -o wide
+
+watch-frontend: ## 👀 Watch all pods in the frontend namespace
+	@echo "👀 Watching frontend namespace (Press Ctrl+C to stop)..."
+	@$(DOCKER) exec k8s-toolbox kubectl get pods -n frontend -w
 
 status-svc: ## 🔌 Show active network services
 	@echo "🔌 ACTIVE NETWORK SERVICES:"

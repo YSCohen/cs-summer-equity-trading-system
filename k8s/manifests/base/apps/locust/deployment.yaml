@@ -30,7 +30,6 @@ spec:
               memory: "256Mi"
           volumeMounts:
             - name: locust-script-volume
-              # Mount the specific file from the config map
               mountPath: /mnt/locust/locustfile.py
               subPath: locustfile.py
       volumes:

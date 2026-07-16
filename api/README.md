@@ -1,11 +1,11 @@
-FastAPI backend for booking and querying trades. Reads/writes Postgres for persistence and Redis for fast reads, and authenticates requests via a session cookie.
+FastAPI backend for booking and querying trades. Reads Postgres for trade history, Reads/Writes Redis for fast data, and authenticates requests via a session cookie.
 
 ### Components (`app/`)
 - `routers/` — `auth`, `accounts`, `positions`, `trades`, `health`: the API surface.
 - `services/` — business logic behind each router (account/position/trade services, S&P ticker validation).
 - `models/` — Pydantic request/response models.
-- `core/` — Postgres pool, Redis client, config, security (cookie auth), logging.
-- `middleware/` — request logging.
+- `core/` — Postgres pool, Redis client, config, security (cookie auth), logging, event_monitoring (logging various test only data).
+- `middleware/` — request logging and timings.
 
 ### Endpoints
 - **Auth**: `POST /register`, `POST /login`, `POST /logout`
@@ -14,6 +14,6 @@ FastAPI backend for booking and querying trades. Reads/writes Postgres for persi
 - **Trades**: `GET /tickers`, `POST /trade` (single or batch), `GET /trades`, `GET /trade/{trade_id}`, `PATCH /edit_trade/{trade_id}`
 - **Health**: `GET /probe`
 
-All routes except auth verify the session cookie. Trades and positions are written to Postgres and mirrored into Redis for the `db-syncer`/`trade-writer` workers to pick up (see [`db/redis-postgres-syncers/README.md`](../db/redis-postgres-syncers/README.md)).
+All routes except auth verify the session cookie. Positions, Accounts, and Users are written to Redis for fast acces ad for the `db-syncer` to then update Postgres. Trades are written to a Redis stream for the `trade-writer` workers to pick up (see [`db/redis-postgres-syncers/README.md`](../db/redis-postgres-syncers/README.md)).
 
-Requires Postgres, Redis, and the logging stack to be up before it will start.
+Requires Postgres, Redis, Redis to be loaded with the S&P tickers, and the logging stack to be up before it will start.

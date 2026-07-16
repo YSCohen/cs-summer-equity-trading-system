@@ -13,24 +13,34 @@ from app.services import ticker_service
 async def individual_trade(user_id: str, trade: dict):
     logger.info("Booking a trade")
     start = time.perf_counter()
-
+    # time_user_lookup_start = time.perf_counter()
     user_data = await get_user_data(user_id)  # Fetch user data from Redis
-
+    # time_user_lookup_end = time.perf_counter()
+    # time_account_lookup_verification_plus_json_load_start = time.perf_counter()
     # Ensure it's a valid account
     account_data = await get_account_data(
         trade["account_id"]
     )  # Fetch account data from Redis
+    # time_account_lookup_verifcation_plus_json_load_end = time.perf_counter()
 
+    # time_trade_details_verification_start = time.perf_counter()
     await verify_trade_details(trade, user_data)
+    # time_trade_details_verification_end = time.perf_counter()
+
+    # time_other_account_verification_start = time.perf_counter()
 
     other_account = trade.get("other_account")
 
     other_account = verify_other_account(other_account)
+    # time_other_account_verification_end = time.perf_counter()
+    # time_create_payload_start = time.perf_counter()
 
     trade_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     now_str = now.isoformat()
-    packed_bytes = create_payload(trade, trade_id, now, other_account, user_id)
+    packed_bytes = create_payload(trade, trade_id, now, None, other_account, user_id)
+    # time_create_payload_end = time.perf_counter()
+    # time_lock_acquisition_start = time.perf_counter()
 
     lock_names = sorted(
         {
@@ -51,16 +61,23 @@ async def individual_trade(user_id: str, trade: dict):
     try:
         # Acquire every lock
         for lock in locks:
-            await lock.acquire()
+            acquired = await lock.acquire()
+            if not acquired:
+                raise HTTPException(
+                    status_code=409, detail="Could not acquire required locks."
+                )
             acquired_locks.append(lock)
+        # time_lock_acquisition_end = time.perf_counter()
 
         new_position = None
         pipe = redis_client.pipeline()
 
         for position_uuid in account_data["positions"]:
             pipe.hget(redis_dictionaries[2], position_uuid)
-
+        # time_position_redis_start = time.perf_counter()
         results = await pipe.execute()
+        # time_position_redis_end = time.perf_counter()
+        # time_position_json_load_plus_verification_start = time.perf_counter()
 
         for position_uuid, raw_position in zip(account_data["positions"], results):
             if raw_position is None:
@@ -87,7 +104,8 @@ async def individual_trade(user_id: str, trade: dict):
                 )  # Save what the new position will be
 
                 break  # only one account and one ticker
-
+        # time_position_json_load_plus_verification_end = time.perf_counter()
+        # time_position_update_start = time.perf_counter()
         if new_position is None:  # This position does not currently exist
             if trade["direction"] != "Buy" and not account_data["can_short"]:
                 logger.warning("Invalid short attempt")
@@ -95,16 +113,23 @@ async def individual_trade(user_id: str, trade: dict):
                     status_code=403,
                     detail=f"Account number {trade['account_id']} does not have permission to short",
                 )
+
             new_position = (
                 trade["quantity"]
                 if trade["direction"] == "Buy"
                 else 0 - trade["quantity"]
             )
+
+            average_cost = trade["price"]
+            total_realized_gains = 0
+
             position_key = str(uuid.uuid4())
             position_data = {
                 "account_id": trade["account_id"],
                 "symbol_ticker": trade["ticker"],
                 "quantity": new_position,
+                "average_cost": average_cost,
+                "total_realized_gains": total_realized_gains,
                 "created_at": now_str,
                 "updated_at": now_str,
             }
@@ -120,8 +145,10 @@ async def individual_trade(user_id: str, trade: dict):
             )
             # High Efficiency: Save to a single field named "d"
             pipe.xadd(TRADE_STREAM, {"d": packed_bytes})
+            # time_pipe_execute_start = time.perf_counter()
             await pipe.execute()
-
+            # time_pipe_execute_end = time.perf_counter()
+            # time_position_update_end = time.perf_counter()
             logger.info("Created new position for account")
         else:  # Editing existing position
             # Grab the existing positions data
@@ -131,6 +158,13 @@ async def individual_trade(user_id: str, trade: dict):
             specific_position = json.loads(raw_specific_position)
 
             # Edit the existing position data
+            new_average_cost, realized_pnl = calculate_p_and_l_changes(
+                trade, specific_position, new_position
+            )
+            specific_position["average_cost"] = new_average_cost
+            specific_position["total_realized_gains"] = (
+                specific_position["total_realized_gains"] + realized_pnl
+            )
             specific_position["quantity"] = new_position
             specific_position["updated_at"] = now_str
 
@@ -140,16 +174,37 @@ async def individual_trade(user_id: str, trade: dict):
             )
             # High Efficiency: Save to a single field named "d"
             pipe.xadd(TRADE_STREAM, {"d": packed_bytes})
+            # time_pipe_execute_start = time.perf_counter()
             await pipe.execute()
-
+            # time_pipe_execute_end = time.perf_counter()
+            # time_position_update_end = time.perf_counter()
             logger.info("Updated existing position for account")
 
     finally:
         # Always release, even if something throws
+        # time_release_locks_start = time.perf_counter()
         for lock in reversed(acquired_locks):
-            await lock.release()
+            try:
+                await lock.release()
+            except Exception:
+                logger.error("Failed to release Redis lock")
+        # time_release_locks_end = time.perf_counter()
 
     duration_ms = (time.perf_counter() - start) * 1000
+
+    # logger.warning(
+    #     f"time user lookup start: {time_user_lookup_start}, time user lookup end: {time_user_lookup_end}\n"
+    #     f"time account lookup and verification plus json load start: {time_account_lookup_verification_plus_json_load_start}, time account lookup and verification plus json load end: {time_account_lookup_verifcation_plus_json_load_end}\n"
+    #     f"time trade details verification start: {time_trade_details_verification_start}, time trade details verification end: {time_trade_details_verification_end}\n"
+    #     f"time other account verification start: {time_other_account_verification_start}, time other account verification end: {time_other_account_verification_end}\n"
+    #     f"time create payload start: {time_create_payload_start}, time create payload end: {time_create_payload_end}\n"
+    #     f"time lock acquisition start: {time_lock_acquisition_start}, time lock acquisition end: {time_lock_acquisition_end}\n"
+    #     f"time position redis start: {time_position_redis_start}, time position redis end: {time_position_redis_end}\n"
+    #     f"time position json load plus verification start: {time_position_json_load_plus_verification_start}, time position json load plus verification end: {time_position_json_load_plus_verification_end}\n"
+    #     f"time position update start: {time_position_update_start}, time position update end: {time_position_update_end}\n"
+    #     f"time pipe execute start: {time_pipe_execute_start}, time pipe execute end: {time_pipe_execute_end}\n"
+    #     f"time release locks start: {time_release_locks_start}, time release locks end: {time_release_locks_end}"
+    # )
 
     logger.info(f"Succesfully booked a trade. Completed in {duration_ms:2f}ms")
 
@@ -157,7 +212,12 @@ async def individual_trade(user_id: str, trade: dict):
 
 
 def create_payload(
-    trade: dict, trade_id: str, now: datetime, other_account: str | None, user_id: str
+    trade: dict,
+    trade_id: str,
+    now: datetime,
+    old_time: datetime,
+    other_account: str | None,
+    user_id: str,
 ):
     now_int = int(now.timestamp())
     payload = {
@@ -166,7 +226,7 @@ def create_payload(
         "user_id": user_id,
         "direction": trade["direction"],  # Must be exact string: 'Buy' or 'Sell'
         "symbol_ticker": trade["ticker"],
-        "created_at": now_int,
+        "created_at": int(old_time.timestamp()) if old_time else now_int,
         "updated_at": now_int,
         "quantity": int(trade["quantity"]),
         "price": str(trade["price"]),  # Kept as string for Postgres NUMERIC ingestion
@@ -242,3 +302,47 @@ async def get_account_data(account_id: str) -> dict:
             status_code=404, detail=f"Account number {account_id} does not exist"
         )
     return json.loads(raw_account)
+
+
+def calculate_p_and_l_changes(trade: dict, specific_position: dict, new_position: int):
+    qty = specific_position["quantity"]
+    avg = specific_position["average_cost"]
+
+    trade_qty = trade["quantity"]
+    trade_price = trade["price"]
+
+    new_avg_cost = specific_position["average_cost"]
+    realized_gains = 0
+
+    if qty == 0:
+        return trade_price, 0
+
+    if qty > 0 and trade["direction"] == "Buy":
+        new_avg_cost = (avg * qty + trade_price * trade_qty) / (qty + trade_qty)
+
+    elif qty > 0 and trade["direction"] == "Sell":
+        if new_position > 0:
+            realized_gains = (trade_price - avg) * trade_qty
+        elif new_position == 0:
+            realized_gains = (trade_price - avg) * trade_qty
+            new_avg_cost = 0
+        else:
+            realized_gains = (trade_price - avg) * qty
+            new_avg_cost = trade_price
+
+    elif qty < 0 and trade["direction"] == "Sell":
+        new_avg_cost = (avg * abs(qty) + trade_price * trade_qty) / (
+            abs(qty) + trade_qty
+        )
+
+    elif qty < 0 and trade["direction"] == "Buy":
+        if new_position < 0:
+            realized_gains = (avg - trade_price) * trade_qty
+        elif new_position == 0:
+            realized_gains = (avg - trade_price) * trade_qty
+            new_avg_cost = 0
+        else:
+            realized_gains = (avg - trade_price) * abs(qty)
+            new_avg_cost = trade_price
+
+    return new_avg_cost, realized_gains

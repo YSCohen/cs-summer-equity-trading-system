@@ -3,7 +3,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: tailscale-ui-entry
-  namespace: frontend # Streamlit lives here
+  namespace: frontend
 spec:
   ingressClassName: tailscale
   tls:
@@ -17,6 +17,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: traefik-proxy # Point to our double-proxy bridge
+                name: traefik-proxy
                 port:
                   number: 80
