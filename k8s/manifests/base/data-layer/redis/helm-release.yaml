@@ -42,6 +42,12 @@ spec:
       enabled: true
       masterSet: mymaster
       quorum: 2
+      livenessProbe:
+        timeoutSeconds: 15
+        failureThreshold: 5
+      readinessProbe:
+        timeoutSeconds: 15
+        failureThreshold: 5
       image:
         registry: docker.io
         repository: bitnami/redis-sentinel
