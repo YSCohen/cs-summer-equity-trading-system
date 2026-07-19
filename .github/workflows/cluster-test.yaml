@@ -12,12 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Mask Podman to Force Docker Fallback
-        run: |
-          sudo rm -rf /usr/bin/podman /usr/libexec/podman
+        uses: actions/checkout@v5
 
       - name: Bootstrap k3d & Flux
+        env:
+          CONTAINER_ENGINE: docker
         run: |
           ./cluster_up.sh
