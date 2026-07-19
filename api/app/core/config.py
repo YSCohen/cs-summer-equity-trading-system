@@ -26,5 +26,5 @@ TRADE_STREAM = os.getenv("TRADE_STREAM")
 
 DAY_IN_SEC = 24 * 60 * 60
 
-SECRET_KEY = "mysecretkey"
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "mysecretkey")
 ALGORITHM = "HS256"

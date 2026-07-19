@@ -21,6 +21,8 @@ patches:
                 env:
                   - name: ENVIRONMENT
                     value: "dev-sean"
+                image: api-image:dev-sean
+                imagePullPolicy: IfNotPresent
   - target:
       kind: Deployment
       name: streamlit

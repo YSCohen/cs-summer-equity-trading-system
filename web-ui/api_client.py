@@ -47,7 +47,19 @@ def _api_error(response):
         st.rerun()
 
     try:
-        return response.json().get("detail", response.text)
+        data = response.json()
+        detail = data.get("detail", response.text)
+        
+        # Handle FastAPI 422 validation error lists cleanly
+        if isinstance(detail, list):
+            messages = []
+            for err in detail:
+                field = err.get("loc", [""])[-1]
+                msg = err.get("msg", "Invalid")
+                messages.append(f"{field}: {msg}")
+            return " | ".join(messages)
+            
+        return detail
     except Exception:
         return response.text
 
@@ -65,23 +77,13 @@ def login(username, password):
         return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
-        # Use response.cookies to get the exact cookie set by this request
-        # and avoid CookieConflictError if the session has multiple path-specific cookies
         session_cookie = response.cookies.get("session")
-        
-        if not session_cookie:
-            try:
-                session_cookie = session.cookies.get("session")
-            except requests.cookies.CookieConflictError:
-                session_cookie = session.cookies.get("session", path="/login")
-
         if not session_cookie:
             return {
                 "status": "error",
                 "message": "Login succeeded, but no session cookie was received.",
             }
 
-        # Clear path-specific cookies and set globally so all API endpoints can use it
         session.cookies.clear()
         session.cookies.set("session", session_cookie)
 
@@ -106,10 +108,28 @@ def register(username, password):
         return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
 
     if response.status_code == 200:
-        return {"status": "success", "username": username}
+        session_cookie = response.cookies.get("session")
+        if session_cookie:
+            session.cookies.clear()
+            session.cookies.set("session", session_cookie)
+            st.session_state.saved_session_cookie = session_cookie
+            return {"status": "success", "username": username, "session_cookie": session_cookie}
+        return {"status": "error", "message": "No session cookie received"}
     else:
         return {"status": "error", "message": _api_error(response)}
 
+
+# --- Auth -------------------------------------------------------------
+
+def validate_session():
+    session = _get_session()
+    response = _safe_call(session.get, f"{API_BASE_URL}/me")
+    if response is None:
+        return {"status": "error", "message": CONNECTION_ERROR_MESSAGE}
+    if response.status_code == 200:
+        return {"status": "success", "data": response.json()}
+    else:
+        return {"status": "error", "message": _api_error(response)}
 
 def logout():
     session = _get_session()

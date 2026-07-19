@@ -3,7 +3,7 @@ from fastapi import HTTPException, Cookie
 from passlib.context import CryptContext
 import jwt
 from app.core.logging import logger
-from app.core.config import DAY_IN_SEC
+from app.core.config import DAY_IN_SEC, SECRET_KEY, ALGORITHM
 from app.core.redis import redis_client
 
 
@@ -14,7 +14,7 @@ def create_cookie(username: str):
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(seconds=DAY_IN_SEC),
     }
-    session_token = jwt.encode(payload, secret_key, algorithm=algorithm)
+    session_token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return session_token
 
 
@@ -29,7 +29,7 @@ async def verify_cookie(session: str = Cookie(None)):
         raise HTTPException(status_code=401, detail="Session expired")
 
     try:
-        payload = jwt.decode(session, secret_key, algorithms=[algorithm])
+        payload = jwt.decode(session, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("username")
         if not user_id:
             logger.warning("Invalid cookie")
@@ -43,8 +43,4 @@ async def verify_cookie(session: str = Cookie(None)):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
-secret_key = (
-    "mysecretkey"  # Encryption Key for passwords TODO come up with something better
-)
-algorithm = "HS256"
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
