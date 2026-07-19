@@ -27,10 +27,11 @@ class EquityTradingUser(HttpUser):
 
     def on_start(self):
         self.account_ids = []
-        # create unique user
-        username = f"user_{uuid.uuid4().hex[:8]}"
 
         for _ in range(3):
+            # create unique user (fresh name each attempt, so a failed
+            # attempt that still registered the name can't block retries)
+            username = f"user_{uuid.uuid4().hex[:8]}"
             response = self.client.post(
                 "/register",
                 json={
