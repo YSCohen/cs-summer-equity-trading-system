@@ -6,6 +6,10 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/service.sticky.cookie: "true"
     traefik.ingress.kubernetes.io/service.sticky.cookie.name: "streamlit-affinity"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.httponly: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.secure: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.samesite: "lax"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.maxage: "86400"
 spec:
   type: ClusterIP
   selector:

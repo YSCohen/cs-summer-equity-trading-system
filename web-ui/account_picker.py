@@ -23,18 +23,20 @@ def get_account_options():
         return cached["labels"], cached["label_to_id"]
 
     result = get_user_accounts()
-    accounts = {}
+    accounts = []
     if result["status"] == "success":
-        accounts = result["data"].get("accounts", {})
+        accounts = result["data"].get("accounts", [])
     label_to_id = {
-        f"{name or '(unnamed account)'} — {account_id}": account_id
-        for name, account_id in accounts.items()
+        f"{acct.get('account_name') or '(unnamed account)'} — {acct['account_id']}": acct['account_id']
+        for acct in accounts
     }
     labels = list(label_to_id.keys())
+    id_to_account = {acct['account_id']: acct for acct in accounts}
 
     st.session_state["_account_options_cache"] = {
         "labels": labels,
         "label_to_id": label_to_id,
+        "id_to_account": id_to_account,
         "fetched_at": time.time(),
     }
     return labels, label_to_id
@@ -56,6 +58,20 @@ def get_account_name(account_id):
     _, label_to_id = get_account_options()
     id_to_name = {aid: lbl.split(" — ")[0] for lbl, aid in label_to_id.items()}
     return id_to_name.get(account_id, account_id)
+
+
+def get_account_can_short(account_id):
+    """Reverse lookup: given an account_id, returns its can_short permission."""
+    if not account_id:
+        return False
+    cached = st.session_state.get("_account_options_cache")
+    if not cached:
+        get_account_options()
+        cached = st.session_state.get("_account_options_cache")
+    
+    id_to_account = cached.get("id_to_account", {})
+    account = id_to_account.get(account_id, {})
+    return account.get("can_short", False)
 
 
 def account_select(label="Account", preselect_account_id=None, key=None):

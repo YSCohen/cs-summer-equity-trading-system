@@ -22,6 +22,7 @@ spec:
         registry: docker.io
         repository: bitnami/redis-exporter
         tag: "latest"
+        pullPolicy: IfNotPresent
 
     commonConfiguration: |-
       appendonly yes
@@ -35,17 +36,31 @@ spec:
       registry: docker.io
       repository: bitnami/redis
       tag: "latest"
+      pullPolicy: IfNotPresent
 
     sentinel:
       enabled: true
       masterSet: mymaster
       quorum: 2
+      livenessProbe:
+        timeoutSeconds: 15
+        failureThreshold: 5
+      readinessProbe:
+        timeoutSeconds: 15
+        failureThreshold: 5
       image:
         registry: docker.io
         repository: bitnami/redis-sentinel
         tag: "latest"
+        pullPolicy: IfNotPresent
 
     master:
+      livenessProbe:
+        timeoutSeconds: 15
+        failureThreshold: 5
+      readinessProbe:
+        timeoutSeconds: 15
+        failureThreshold: 5
       extraVolumes:
         - name: redis-modules
           emptyDir: {}
@@ -55,6 +70,7 @@ spec:
       initContainers:
         - name: copy-module
           image: redis/redis-stack-server:latest
+          imagePullPolicy: IfNotPresent
           command: ["sh", "-c", "cp /opt/redis-stack/lib/redistimeseries.so /opt/redis-modules/"]
           volumeMounts:
             - name: redis-modules
@@ -72,6 +88,12 @@ spec:
 
     replica:
       replicaCount: 3
+      livenessProbe:
+        timeoutSeconds: 15
+        failureThreshold: 5
+      readinessProbe:
+        timeoutSeconds: 15
+        failureThreshold: 5
       extraVolumes:
         - name: redis-modules
           emptyDir: {}
@@ -81,6 +103,7 @@ spec:
       initContainers:
         - name: copy-module
           image: redis/redis-stack-server:latest
+          imagePullPolicy: IfNotPresent
           command: ["sh", "-c", "cp /opt/redis-stack/lib/redistimeseries.so /opt/redis-modules/"]
           volumeMounts:
             - name: redis-modules
