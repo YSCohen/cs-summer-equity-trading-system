@@ -5,7 +5,7 @@ A containerized, Kubernetes-native high-frequency equity trading system: a FastA
 ### The Stack
 * **API**: FastAPI (Python) with `uv` package management. See [`api/README.md`](api/README.md).
 * **UI**: Streamlit (Python) with AG Grid tables for mass trading and data visualization. See [`web-ui/README.md`](web-ui/README.md).
-* **Workers**: Rust syncers (`db-syncer`, `trade-writer`, `price-cacher`, `price-timeseries-cacher`, `redis-populator`) moving data between Redis and Postgres. See [`db/redis-postgres-syncers/README.md`](db/redis-postgres-syncers/README.md).
+* **Workers**: Rust syncers (`db-syncer`, `trade-writer`, `price-cacher`, `redis-populator`) moving data between Redis and Postgres. See [`db/redis-postgres-syncers/README.md`](db/redis-postgres-syncers/README.md).
 * **Data Layer**: Redis with Redis Sentinel (HA, fast ingestion), PostgreSQL via CloudNativePG (HA persistence), PgBouncer for connection pooling, Adminer and RedisInsight for DB inspection.
 * **Autoscaling & Ingress**: KEDA for event-driven autoscaling, Traefik for ingress, Reloader for dynamic config updates.
 * **Testing**: Locust for distributed load testing. See [`locust/README.md`](locust/README.md).

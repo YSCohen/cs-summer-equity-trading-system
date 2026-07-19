@@ -37,10 +37,16 @@ echo "   Target : $TARGET_FILE"
 echo "=========================================================="
 
 # ============================================================
-# Detect container engine
+# Detect container engine (CONTAINER_ENGINE=docker|podman overrides)
 # ============================================================
 ENGINE=""
-if command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
+if [ -n "${CONTAINER_ENGINE:-}" ]; then
+    if ! "$CONTAINER_ENGINE" info >/dev/null 2>&1; then
+        echo "❌ ERROR: CONTAINER_ENGINE=$CONTAINER_ENGINE, but it is not running."
+        exit 1
+    fi
+    ENGINE="$CONTAINER_ENGINE"
+elif command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
     ENGINE="podman"
 elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     ENGINE="docker"
