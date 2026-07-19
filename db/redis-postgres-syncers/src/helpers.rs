@@ -157,7 +157,7 @@ pub struct Position {
     pub account_id: String,
     pub symbol_ticker: String,
     pub quantity: i32,
-    #[serde(default)] // use default so won't fail until API add these fields
+    #[serde(default)]
     pub average_cost: Option<f64>,
     #[serde(default)]
     pub total_realized_gains: Option<f64>,

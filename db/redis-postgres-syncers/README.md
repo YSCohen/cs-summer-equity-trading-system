@@ -1,4 +1,4 @@
-Rust workspace of five binaries that move data between Redis and Postgres, plus market data ingestion. Each binary is packaged as a container image and deployed as its own Kubernetes deployment/job.
+Rust package of four binaries that move data between Redis and Postgres, plus market data ingestion. Each binary is packaged as a container image and deployed as its own Kubernetes deployment/job.
 
 ### Binaries (`src/`)
 - **`trade-writer`** — continually reads booked trades off a Redis stream (written by the API) and writes them to Postgres.
