@@ -1,77 +1,34 @@
 #!/usr/bin/env bash
 
-# Highly defensive scripting
-set -e
-set -u
-case "$SHELL" in
-*bash*) set -o pipefail ;;
-esac
+set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export HOST_ROOT="$PROJECT_ROOT"
 
 # ============================================================
-# systemd-resolved Pre-Flight Check (Excluding Ubuntu)
+# Argument parsing — default to upstream if no name is given
 # ============================================================
+DEV_NAME="${1:-}"
+DEV_NAME="${DEV_NAME#--}" # tolerate the old --name flag form
 
-OS_ID="unknown"
-if [ -f /etc/os-release ]; then
-    # Source the OS release file safely
-    . /etc/os-release
-    OS_ID="${ID:-unknown}"
+if [ -z "$DEV_NAME" ] || [ "$DEV_NAME" = "upstream" ]; then
+    REPO_NAME="main-repo"
+    TARGET_FILE="target-upstream.yaml"
+else
+    REPO_NAME="dev-repo-$DEV_NAME"
+    TARGET_FILE="target-$DEV_NAME.yaml"
+    if [ ! -f "$PROJECT_ROOT/k8s/flux-system/targets/$TARGET_FILE" ]; then
+        echo "❌ Unknown target: $DEV_NAME"
+        echo "   Usage: ./cluster_up.sh [name]   (no name = upstream, production-like)"
+        echo "   Available targets:"
+        for f in "$PROJECT_ROOT"/k8s/flux-system/targets/target-*.yaml; do
+            f="$(basename "$f")"
+            f="${f#target-}"
+            echo "     ${f%.yaml}"
+        done
+        exit 1
+    fi
 fi
-
-# Trigger ONLY if resolvectl exists AND the OS is NOT Ubuntu
-if command -v resolvectl >/dev/null 2>&1 && [[ "$OS_ID" != "cachyos" ]] && [[ "$OS_ID" != "ubuntu" ]]; then
-    echo ""
-    echo "🌐 SYSTEMD-RESOLVED DETECTED"
-    echo "----------------------------------------------------------"
-    echo "⚠️  WARNING: Your host uses systemd-resolved (127.0.0.53)."
-    echo "   If you are using Docker, this local stub often breaks"
-    echo "   container DNS resolution, causing them to lose internet."
-    echo ""
-    echo "   To prevent this, please ensure your /etc/docker/daemon.json"
-    echo "   is configured to bypass the local stub with upstream servers:"
-    echo '   {'
-    echo '     "dns": ["1.0.0.1", "1.1.1.1"]'
-    echo '   }'
-    echo "   (Remember to run 'sudo systemctl restart docker' after updating)"
-    echo "----------------------------------------------------------"
-fi
-
-# ============================================================
-# Flag parsing — default to upstream if no flag is given
-# ============================================================
-REPO_NAME="main-repo"
-TARGET_FILE="target-upstream.yaml"
-
-case "${1:-}" in
---sean)
-    REPO_NAME="dev-repo-sean"
-    TARGET_FILE="target-sean.yaml"
-    ;;
---max)
-    REPO_NAME="dev-repo-max"
-    TARGET_FILE="target-max.yaml"
-    ;;
---will)
-    REPO_NAME="dev-repo-will"
-    TARGET_FILE="target-will.yaml"
-    ;;
---yehuda)
-    REPO_NAME="dev-repo-yehuda"
-    TARGET_FILE="target-yehuda.yaml"
-    ;;
-"")
-    : # use defaults
-    ;;
-*)
-    echo "❌ Unknown flag: ${1}"
-    echo "   Usage: ./cluster_up.sh [--sean | --max | --yehuda | --will]"
-    echo "   No flag = upstream (production-like)"
-    exit 1
-    ;;
-esac
 
 echo "=========================================================="
 echo "🚀 Deploying Equity Trading System"
@@ -125,19 +82,12 @@ echo "✅ Socket: $ACTUAL_SOCK"
 # Sanity check
 # ============================================================
 if [ ! -d "$PROJECT_ROOT/k8s" ]; then
-    echo "❌ ERROR: 'k8s' not found. Are you running from the repo root?"
+    echo "❌ ERROR: '$PROJECT_ROOT/k8s' not found. Is the repo checkout intact?"
     exit 1
 fi
 
 cd "$PROJECT_ROOT/k8s"
 echo "DOCKER_HOST_PATH=$ACTUAL_SOCK" >.env
-
-# ============================================================
-# Fix permissions
-# ============================================================
-chmod 755 . 2>/dev/null || true
-chmod 644 k3d-*.yaml 2>/dev/null || true
-chmod -R 755 manifests 2>/dev/null || true
 
 # ============================================================
 # Tear down any previous environment
@@ -156,7 +106,6 @@ set -e
 # ============================================================
 echo "📦 Starting k8s-toolbox..."
 $ENGINE compose up -d --build
-sleep 2
 
 echo "🚀 Creating cluster (bootstrapping Flux controllers)..."
 
@@ -210,7 +159,9 @@ $ENGINE exec -i k8s-toolbox flux reconcile kustomization 1-infra --with-source
 
 echo ""
 echo "📈 ======================================================= 📈"
-echo "               BULL MARKET ENGAGED: SYSTEM LIVE              "
+echo "   DEPLOYMENT INITIATED — Flux is reconciling the system     "
+echo "   Services come online as images pull; watch with:          "
+echo "   'make status' (or 'flux get kustomizations')              "
 echo " --------------------------------------------------------- "
 echo " 🟢 API Gateway       -> http://api.localhost:8080"
 echo " 📊 Streamlit UI      -> http://streamlit.localhost:8080"

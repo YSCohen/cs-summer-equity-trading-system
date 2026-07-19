@@ -19,6 +19,11 @@ check_installation() {
 # Function to ensure Tailscale is up and return the IP
 setup_tailscale() {
     if ! command -v tailscale &>/dev/null; then
+        read -p "Tailscale is not installed. Install it now? (y/N): " install_ts
+        if [[ ! "$install_ts" =~ ^[Yy]$ ]]; then
+            echo "❌ Aborted: Tailscale is required for this operation."
+            return 1
+        fi
         echo "📦 Installing Tailscale..."
         curl -fsSL https://tailscale.com/install.sh | sh
     fi
@@ -42,18 +47,12 @@ setup_rootless_kubectl() {
     sudo chown $(id -u):$(id -g) ~/.kube/config
     sed -i "s/127.0.0.1/${TAILSCALE_IP}/g" ~/.kube/config
 
-    # Append to shell profiles if not already present
-    grep -qxF 'export KUBECONFIG=~/.kube/config' ~/.bashrc 2>/dev/null || echo 'export KUBECONFIG=~/.kube/config' >>~/.bashrc
-    grep -qxF 'export KUBECONFIG=~/.kube/config' ~/.zshrc 2>/dev/null || echo 'export KUBECONFIG=~/.kube/config' >>~/.zshrc
-
-    # Export for the current script session
-    export KUBECONFIG=~/.kube/config
-    echo "✅ Kubectl is now accessible without sudo (Restart your terminal to apply globally)."
+    echo "✅ Kubectl is now accessible without sudo (config written to ~/.kube/config)."
 }
 
 # Function to install/join a Control Plane
 install_control_plane() {
-    setup_tailscale
+    setup_tailscale || return
 
     read -p "Are you joining an EXISTING Control Plane? (y/N): " join_existing
     if [[ "$join_existing" =~ ^[Yy]$ ]]; then
@@ -86,8 +85,6 @@ install_control_plane() {
           --tls-san=${TAILSCALE_IP}" sh -s -
     fi
 
-    sudo systemctl enable k3s >/dev/null 2>&1 || true
-
     echo "⏳ Waiting for K3s API to become available..."
     until sudo k3s kubectl get nodes &>/dev/null; do sleep 2; done
 
@@ -100,7 +97,7 @@ install_control_plane() {
 
 # Function to install a Worker Node
 install_worker() {
-    setup_tailscale
+    setup_tailscale || return
 
     read -p "Enter the Control Plane Tailscale IP: " CP_IP
     read -p "Enter the K3S_TOKEN: " WORKER_TOKEN
@@ -116,8 +113,6 @@ install_worker() {
       --flannel-iface=tailscale0" \
         K3S_URL="https://${CP_IP}:6443" \
         K3S_TOKEN="${WORKER_TOKEN}" sh -s -
-
-    sudo systemctl enable k3s-agent >/dev/null 2>&1 || true
 
     echo "🎉 Worker Node Bootstrap Complete!"
 }
@@ -233,16 +228,21 @@ bootstrap_flux() {
 
 # Function to setup Make Developer Toolbox
 setup_make_toolbox() {
-    echo "📦 Installing Make (Debian)..."
     if ! command -v make &>/dev/null; then
-        sudo apt-get update
-        sudo apt-get install -y make
+        if command -v apt-get &>/dev/null; then
+            echo "📦 Installing Make..."
+            sudo apt-get update
+            sudo apt-get install -y make
+        else
+            echo "❌ Make is not installed and apt-get is unavailable. Install make with your package manager and re-run."
+            return 1
+        fi
     else
         echo "✅ Make is already installed."
     fi
 
     echo "⬇️ Downloading Developer Toolbox (Makefiles)..."
-    
+
     local REPO_OWNER="SM26-Industrial-Software-Dev"
     local REPO_NAME="equity-trading-system"
     local REF="main"
@@ -250,12 +250,23 @@ setup_make_toolbox() {
     read -p "Branch or tag to fetch Makefiles from [main]: " input_ref
     REF="${input_ref:-main}"
 
-    curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}/make/k3s.mk" -o ~/Makefile
-    
-    echo "✅ Make commands imported successfully. Run 'make help' to see available commands."
+    if [ -f ~/Makefile ]; then
+        read -p "⚠️ ~/Makefile already exists. Overwrite it? (y/N): " overwrite
+        if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
+            echo "Aborted. No changes made."
+            return 0
+        fi
+    fi
+
+    if curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}/make/k3s.mk" -o ~/Makefile; then
+        echo "✅ Make commands imported to ~/Makefile. Run 'make help' from your home directory to see available commands."
+    else
+        echo "❌ Download failed. ~/Makefile was not updated correctly."
+        return 1
+    fi
 }
 
-# Function to enable Tailscale Funnel
+# Function to update this script from the repository
 update_self() {
     local REPO_OWNER="SM26-Industrial-Software-Dev"
     local REPO_NAME="equity-trading-system"
@@ -265,7 +276,6 @@ update_self() {
     REF="${REF:-main}"
 
     local RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}/${SCRIPT_PATH}"
-    local API_URL="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${SCRIPT_PATH}?ref=${REF}"
     local TMP_FILE
     TMP_FILE=$(mktemp)
 
@@ -276,56 +286,19 @@ update_self() {
         return 1
     fi
 
-    # 1. Sanity check: non-empty and actually looks like a shell script.
+    # Sanity check: non-empty, looks like a shell script, and parses.
     if [ ! -s "$TMP_FILE" ] || ! head -n1 "$TMP_FILE" | grep -q '^#!'; then
         echo "❌ Update aborted: downloaded file is empty or doesn't look like a script."
         rm -f "$TMP_FILE"
         return 1
     fi
-
-    # 2. Syntax check before we trust it at all.
     if ! bash -n "$TMP_FILE"; then
         echo "❌ Update aborted: downloaded script failed a syntax check."
         rm -f "$TMP_FILE"
         return 1
     fi
 
-    # 3. Integrity check against GitHub's own record for this file+ref.
-    #    This guards against a truncated/corrupted download or a mismatch
-    #    between the raw and API endpoints. It does NOT protect against a
-    #    genuinely compromised upstream repo -- for that you'd need signed
-    #    commits/tags and to verify the signature, which this repo doesn't
-    #    currently publish.
-    echo "🔍 Verifying against GitHub's recorded blob hash..."
-    local EXPECTED_SHA ACTUAL_SHA
-    EXPECTED_SHA=$(curl -fsSL -H "Accept: application/vnd.github+json" "$API_URL" 2>/dev/null |
-        grep -o '"sha"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 |
-        sed -E 's/.*"sha"[[:space:]]*:[[:space:]]*"([^"]*)"/\1/')
-
-    if [ -n "$EXPECTED_SHA" ]; then
-        ACTUAL_SHA=$({
-            printf 'blob %s\0' "$(wc -c <"$TMP_FILE")"
-            cat "$TMP_FILE"
-        } | sha1sum | awk '{print $1}')
-        if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
-            echo "❌ Update aborted: checksum mismatch."
-            echo "   expected: $EXPECTED_SHA"
-            echo "   got:      $ACTUAL_SHA"
-            rm -f "$TMP_FILE"
-            return 1
-        fi
-        echo "✅ Checksum verified against GitHub API."
-    else
-        echo "⚠️  Could not fetch expected checksum from the GitHub API (rate-limited or offline?)."
-        read -p "   Continue anyway without checksum verification? (y/N): " force_continue
-        if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
-            echo "Aborted. No changes made."
-            rm -f "$TMP_FILE"
-            return 1
-        fi
-    fi
-
-    # 4. Show exactly what's changing before committing to it.
+    # Show exactly what's changing before committing to it.
     echo ""
     echo "📋 Changes to be applied:"
     diff -u "$0" "$TMP_FILE" || true
@@ -337,7 +310,7 @@ update_self() {
         return 0
     fi
 
-    # 5. Keep a rollback copy before overwriting the running script.
+    # Keep a rollback copy before overwriting the running script.
     cp "$0" "$0.bak"
     echo "🗄️  Backed up current script to $0.bak"
 

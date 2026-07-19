@@ -57,6 +57,7 @@ We use **Loki** to aggregate logs.
 ## 4. Need Help?
 * **Flux Stuck?**: run `make sync` to force an immediate reconciliation.
 * **Load Testing**: use `./locust_reload.sh` to push local `locustfile.py` changes to the cluster without waiting for the full GitOps cycle.
+* **Containers sometimes lose internet (systemd-resolved hosts)**: on hosts where systemd-resolved provides the local DNS stub (127.0.0.53), Docker containers can fail to resolve DNS. Point Docker at upstream servers in `/etc/docker/daemon.json` — e.g. `{ "dns": ["1.1.1.1", "1.0.0.1"] }` — then `sudo systemctl restart docker`.
 
 ---
 

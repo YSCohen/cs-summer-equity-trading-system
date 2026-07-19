@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 
-# Highly defensive scripting
-set -e
-set -u
+set -euo pipefail
 
-# 1. Dynamically find the project root and export it for Docker Compose
+# Dynamically find the project root and export it for Docker Compose
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export HOST_ROOT="$PROJECT_ROOT"
 
@@ -26,19 +24,19 @@ else
 fi
 echo "✅ Container engine: $ENGINE"
 
-# 3. Navigate to K8s directory
+# Navigate to K8s directory
 cd "$PROJECT_ROOT/k8s"
 
-# 4. Tear down the cluster using the toolbox
+# Tear down the cluster using the toolbox
 echo "🧹 Destroying K3d cluster..."
 set +e # Disable strict mode temporarily in case the cluster is already gone
 $ENGINE exec k8s-toolbox k3d cluster delete dev-cluster >/dev/null 2>&1
 
-# 5. Tear down the Compose stack and clean up zombie networks
+# Tear down the Compose stack and clean up zombie networks
 echo "📦 Tearing down k8s-toolbox and volumes..."
 $ENGINE compose down -v >/dev/null 2>&1
 $ENGINE network rm k3d-network >/dev/null 2>&1
 $ENGINE rm -f $($ENGINE ps -aq -f name=k3d-dev-cluster) >/dev/null 2>&1
 set -e
 
-echo "✅ Environment successfully destroyed."
+echo "✅ Teardown complete."

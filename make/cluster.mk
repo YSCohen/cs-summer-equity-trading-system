@@ -1,4 +1,4 @@
-.PHONY: up down toolbox-up toolbox-down cluster-up cluster-up-sean cluster-up-max cluster-up-yehuda cluster-up-will cluster-down rebuild
+.PHONY: up down toolbox-up toolbox-down cluster-up cluster-down rebuild
 
 # ==========================================
 # 🏗️ TOOLBOX & CLUSTER LIFECYCLE
@@ -19,21 +19,9 @@ cluster-up: ## Deploy from UPSTREAM (production-like)
 	@echo "🚀 Deploying from UPSTREAM (production-like)..."
 	@bash cluster_up.sh
 
-cluster-up-sean: ## Deploy from Sean's personal fork
-	@echo "🚀 Deploying from Sean's fork..."
-	@bash cluster_up.sh --sean
-
-cluster-up-max: ## Deploy from Max's personal fork
-	@echo "🚀 Deploying from Max's fork..."
-	@bash cluster_up.sh --max
-
-cluster-up-yehuda: ## Deploy from Yehuda's personal fork
-	@echo "🚀 Deploying from Yehuda's fork..."
-	@bash cluster_up.sh --yehuda
-
-cluster-up-will: ## Deploy from Will's personal fork
-	@echo "🚀 Deploying from Will's fork..."
-	@bash cluster_up.sh --will
+cluster-up-%: ## Deploy from a personal fork (e.g. make cluster-up-sean)
+	@echo "🚀 Deploying from $*'s fork..."
+	@bash cluster_up.sh $*
 
 cluster-down: ## Delete the local k3d dev cluster
 	-$(DOCKER) exec k8s-toolbox k3d cluster delete dev-cluster
