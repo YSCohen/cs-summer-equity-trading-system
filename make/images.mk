@@ -1,16 +1,16 @@
-.PHONY: update-ui clean-images
+.PHONY: clean-images
 
 # ==========================================
 # 🐳 IMAGE BUILDING & CLEANUP
 # ==========================================
 
-update-ui: ## Rebuild UI docker image, import to k3d, clear cache, and restart UI
-	@echo "🚀 Rebuilding web-ui docker image..."
-	$(DOCKER) build -t web-ui-image:dev-sean ./web-ui
+update-ui-%: ## Rebuild UI image tagged dev-<name>, import to k3d, and restart UI (e.g. make update-ui-sean)
+	@echo "🚀 Rebuilding web-ui docker image (web-ui-image:dev-$*)..."
+	$(DOCKER) build -t web-ui-image:dev-$* ./web-ui
 	@echo "🧹 Cleaning up dangling host layers..."
 	$(DOCKER) image prune -f
 	@echo "📦 Importing image into k3d..."
-	$(DOCKER) exec k8s-toolbox k3d image import web-ui-image:dev-sean -c dev-cluster
+	$(DOCKER) exec k8s-toolbox k3d image import web-ui-image:dev-$* -c dev-cluster
 	@echo "♻️  Restarting frontend pods to apply new image..."
 	$(MAKE) --no-print-directory kubectl CMD="delete pod -n frontend -l app=streamlit"
 	@echo "✅ Done!"

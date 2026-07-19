@@ -7,8 +7,6 @@ services:
     container_name: k8s-toolbox
     tty: true
     stdin_open: true
-    privileged: true
-    user: root
     security_opt:
       - label:disable
 
@@ -19,7 +17,7 @@ services:
       - k3d-network
 
     volumes:
-      - ${DOCKER_HOST_PATH:-/var/run/docker.sock}:${DOCKER_HOST_PATH:-/var/run/docker.sock}:z
+      - ${DOCKER_HOST_PATH:-/var/run/docker.sock}:${DOCKER_HOST_PATH:-/var/run/docker.sock}
       - ../:/workspace:z
       - ${HOST_ROOT}:${HOST_ROOT}:z
 networks:

@@ -15,7 +15,8 @@ RUN curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | \
 # Install Helm
 RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
     && chmod 700 get_helm.sh \
-    && DESIRED_VERSION=v4.2.2 ./get_helm.sh
+    && DESIRED_VERSION=v4.2.2 ./get_helm.sh \
+    && rm get_helm.sh
 
 COPY --from=ghcr.io/fluxcd/flux-cli:v2.7.0 /usr/local/bin/flux /usr/local/bin/flux
 WORKDIR /workspace

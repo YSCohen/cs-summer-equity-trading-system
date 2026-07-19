@@ -15,7 +15,7 @@ chaos-kill: ## 💀 Interactive menu to delete pods for a specific app
 	@echo "============================================="
 	@echo "    💥 EQUITY TRADING APP - KILL SIMULATOR"
 	@echo "============================================="
-	@PS3="Select an app to kill (1-9, or type '10' to exit): "; \
+	@PS3="Select an app to kill (or select Exit): "; \
 	select app in $(KILL_BANK) "Exit"; do \
 		if [ "$$app" = "Exit" ]; then echo "Gracefully exiting kill menu."; break; fi; \
 		if [ -n "$$app" ]; then \
