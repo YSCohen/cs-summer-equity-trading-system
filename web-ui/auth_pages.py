@@ -1,19 +1,7 @@
-import time
-
 import streamlit as st
 
 from api_client import login, register
 import auth_state
-
-
-def render_auth_sidebar():
-    """Renders the Login/Register page picker in the sidebar (radio --
-    shows current page, no free text entry). Returns the selected page
-    name: 'Login' or 'Register'."""
-    st.sidebar.markdown("**Page**")
-    return st.sidebar.radio(
-        "Page", ["Login", "Register"], label_visibility="collapsed"
-    )
 
 
 def render_login_page():
@@ -26,7 +14,6 @@ def render_login_page():
         result = login(username, password)
         if result["status"] == "success":
             auth_state.remember_login(username, result["session_cookie"])
-            time.sleep(0.5)
             st.session_state.redirect_to = "pages/my_accounts.py"
             st.rerun()
         else:
@@ -45,14 +32,9 @@ def render_register_page():
     if submitted:
         result = register(username, password)
         if result["status"] == "success":
-            login_result = login(username, password)
-            if login_result["status"] == "success":
-                auth_state.remember_login(username, login_result["session_cookie"])
-                st.session_state.redirect_to = "pages/my_accounts.py"
-                st.rerun()
-            else:
-                st.success(f"Account created for {result['username']}. You can now log in.")
-                st.error(login_result.get("message", "Auto-login failed."))
+            auth_state.remember_login(username, result["session_cookie"])
+            st.session_state.redirect_to = "pages/my_accounts.py"
+            st.rerun()
         else:
             st.error(result["message"])
 
