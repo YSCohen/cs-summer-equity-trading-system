@@ -342,7 +342,7 @@ async fn sync_usernames(
             copy_columns: "username, user_id",
             conflict_column: "username",
             update_assignments: "user_id = EXCLUDED.user_id",
-            // the redis value is a bare uuid string, not JSON — pass it through.
+            // the redis value is a bare uuid string, not JSON - pass it through.
             parse_row: |_username, user_id| Ok(user_id.to_string()),
             format_row: |username, user_id| format!("{}\t{}", username, user_id),
         },

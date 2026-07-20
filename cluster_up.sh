@@ -6,7 +6,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export HOST_ROOT="$PROJECT_ROOT"
 
 # ============================================================
-# Argument parsing — default to upstream if no name is given
+# Argument parsing - default to upstream if no name is given
 # ============================================================
 DEV_NAME="${1:-}"
 DEV_NAME="${DEV_NAME#--}" # tolerate the old --name flag form
@@ -122,7 +122,7 @@ $ENGINE exec -e HOST_ROOT="$PROJECT_ROOT" -i k8s-toolbox \
     --k3s-arg "--resolv-conf=/tmp/custom-resolv.conf@agent:*"
 
 # ============================================================
-# Wait for API server — check the API endpoint directly,
+# Wait for API server - check the API endpoint directly,
 # not just node readiness, to avoid the openapi dial error
 # ============================================================
 echo "⏳ Waiting for Kubernetes API server..."
@@ -165,7 +165,7 @@ $ENGINE exec -i k8s-toolbox flux reconcile kustomization 1-infra --with-source
 
 echo ""
 echo "📈 ======================================================= 📈"
-echo "   DEPLOYMENT INITIATED — Flux is reconciling the system     "
+echo "   DEPLOYMENT INITIATED - Flux is reconciling the system     "
 echo "   Services come online as images pull; watch with:          "
 echo "   'make status' (or 'flux get kustomizations')              "
 echo " --------------------------------------------------------- "

@@ -11,7 +11,7 @@ How to build, run, and debug the Equity Trading System.
 Every developer has their own namespace (e.g., `dev-sean`, `dev-max`) to work in.
 
 ### How to use your Overlay:
-1. **Push to GitHub**: Flux only reconciles what's in the repository — `git push` before your changes appear in the cluster.
+1. **Push to GitHub**: Flux only reconciles what's in the repository - `git push` before your changes appear in the cluster.
 2. **Changing Images**: to use a personal image instead of the org default, edit `kustomization.yaml` in your overlay directory (`k8s/manifests/overlays/dev-<name>/`):
    * Uncomment the `images` section.
    * Update `newName` to point to your registry.
@@ -21,7 +21,7 @@ Every developer has their own namespace (e.g., `dev-sean`, `dev-max`) to work in
 ---
 
 ## 2. The "Make" Toolbox (Debugging)
-All `kubectl` operations are mapped to `Makefile` targets — no need to memorize the raw commands.
+All `kubectl` operations are mapped to `Makefile` targets - no need to memorize the raw commands.
 
 * **See all available commands**: Run `make help` to see the full list of targets and descriptions.
 * **Check System Health**:
@@ -45,7 +45,7 @@ All `kubectl` operations are mapped to `Makefile` targets — no need to memoriz
 We use **Loki** to aggregate logs.
 
 ### Standard Output (stdout) Requirements
-* **Everything must be JSON**: logs to `stdout` must be serialized as JSON — the collectors parse JSON automatically for Grafana.
+* **Everything must be JSON**: logs to `stdout` must be serialized as JSON - the collectors parse JSON automatically for Grafana.
 * **Push URL**: to push logs manually: `http://loki-stack.monitoring.svc.cluster.local:3100/loki/api/v1/push`
 
 ### Debugging Logs in Grafana
@@ -57,7 +57,7 @@ We use **Loki** to aggregate logs.
 ## 4. Need Help?
 * **Flux Stuck?**: run `make sync` to force an immediate reconciliation.
 * **Load Testing**: use `./locust_reload.sh` to push local `locustfile.py` changes to the cluster without waiting for the full GitOps cycle.
-* **Containers sometimes lose internet (systemd-resolved hosts)**: on hosts where systemd-resolved provides the local DNS stub (127.0.0.53), Docker containers can fail to resolve DNS. Point Docker at upstream servers in `/etc/docker/daemon.json` — e.g. `{ "dns": ["1.1.1.1", "1.0.0.1"] }` — then `sudo systemctl restart docker`.
+* **Containers sometimes lose internet (systemd-resolved hosts)**: on hosts where systemd-resolved provides the local DNS stub (127.0.0.53), Docker containers can fail to resolve DNS. Point Docker at upstream servers in `/etc/docker/daemon.json` - e.g. `{ "dns": ["1.1.1.1", "1.0.0.1"] }` - then `sudo systemctl restart docker`.
 
 ---
 

@@ -1,11 +1,11 @@
 FastAPI backend for booking and querying trades. Reads Postgres for trade history, reads/writes Redis for fast data, and authenticates requests via a session cookie.
 
 ### Components (`app/`)
-- `routers/` — `auth`, `accounts`, `positions`, `trades`, `health`: the API surface.
-- `services/` — business logic behind each router (account/position/trade services, S&P ticker validation).
-- `models/` — Pydantic request/response models.
-- `core/` — Postgres pool, Redis client, config, security (cookie auth), logging.
-- `middleware/` — request logging and timings.
+- `routers/` - `auth`, `accounts`, `positions`, `trades`, `health`: the API surface.
+- `services/` - business logic behind each router (account/position/trade services, S&P ticker validation).
+- `models/` - Pydantic request/response models.
+- `core/` - Postgres pool, Redis client, config, security (cookie auth), logging.
+- `middleware/` - request logging and timings.
 
 ### Endpoints
 - **Auth**: `POST /register`, `POST /login`, `POST /logout`

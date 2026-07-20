@@ -1,4 +1,4 @@
-//! populate redis hashes from postgres tables — the reverse of db-syncer.
+//! populate redis hashes from postgres tables - the reverse of db-syncer.
 //! reads users, accounts, positions from postgres and (re)writes the matching
 //! redis hashes. runs once and exits (a cold-cache bootstrap / restore).
 
