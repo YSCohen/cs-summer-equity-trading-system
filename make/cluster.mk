@@ -1,4 +1,5 @@
 .PHONY: up down toolbox-up toolbox-down cluster-up cluster-down rebuild
+.PHONY: cluster-up-sean # remove me
 
 # ==========================================
 # 🏗️ TOOLBOX & CLUSTER LIFECYCLE
