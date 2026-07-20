@@ -35,9 +35,9 @@ def _position_row(position, account_id=None):
     )
 
     return {
-        "Account": get_account_name(account_id) if account_id else "—",
-        "Account ID": account_id or "—",
-        "Ticker": ticker or "—",
+        "Account": get_account_name(account_id) if account_id else "-",
+        "Account ID": account_id or "-",
+        "Ticker": ticker or "-",
         "Quantity": quantity,
         "Price/Share": round(price, 2) if price is not None else None,
         "Total Value": round(total_value, 2) if total_value is not None else None,

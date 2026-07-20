@@ -33,15 +33,15 @@ def _position_card(position, account_id=None):
 
     with st.container(border=True):
         cols = st.columns([2, 2, 2, 2, 3])
-        cols[0].write(f"**{ticker or '—'}**")
-        cols[1].write(f"Qty: {quantity if quantity is not None else '—'}")
+        cols[0].write(f"**{ticker or '-'}**")
+        cols[1].write(f"Qty: {quantity if quantity is not None else '-'}")
 
         if price is not None:
             cols[2].metric("Price/Share", f"${price:,.2f}")
             if quantity is not None:
                 cols[3].metric("Total Value", f"${price * quantity:,.2f}")
             else:
-                cols[3].caption("Total Value: —")
+                cols[3].caption("Total Value: -")
         else:
             cols[2].caption("Price/Share: unavailable")
             cols[3].caption("Total Value: unavailable")
@@ -121,7 +121,7 @@ def _all_positions_fragment():
         if not rows:
             st.info("No positions found.")
             return
-        st.caption("All positions sorted by total value — filter above to narrow down.")
+        st.caption("All positions sorted by total value - filter above to narrow down.")
         render_positions_grid(rows, empty_message="No positions found.", key="all_positions_grid")
         return
 

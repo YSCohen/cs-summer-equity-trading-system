@@ -16,9 +16,9 @@ My Retirement Account,GOOGL,Buy,200,175.30,other-account-id"""
 def _resolve_accounts():
     """Returns a dict of {lowercased account name: account_id} for fast lookup."""
     _, label_to_id = get_account_options()
-    # label_to_id keys look like "Name — uuid", so split on " — " to get name
+    # label_to_id keys look like "Name - uuid", so split on " - " to get name
     return {
-        lbl.split(" — ")[0].strip().lower(): aid
+        lbl.split(" - ")[0].strip().lower(): aid
         for lbl, aid in label_to_id.items()
     }
 
@@ -37,7 +37,7 @@ def _parse_line(line: str, line_num: int, name_to_id: dict) -> dict:
             "Quantity": "",
             "Price": "",
             "Other Account": "",
-            "Status": f"Too few fields — expected at least {EXPECTED_FIELDS}, got {len(parts)}",
+            "Status": f"Too few fields - expected at least {EXPECTED_FIELDS}, got {len(parts)}",
             "_valid": False,
             "_account_id": None,
         }
@@ -353,7 +353,7 @@ def render_mass_trade_page():
     """)
 
     # This lives in its own form. Cmd/Ctrl+Enter inside a text_area submits
-    # whichever form contains it — isolating the paste box here means that
+    # whichever form contains it - isolating the paste box here means that
     # keystroke can only ever trigger "Preview Trades" below, and has no
     # way to reach (or auto-fire) the real submit button further down.
     with st.form("mass_trade_paste_form"):
@@ -376,7 +376,7 @@ def render_mass_trade_page():
     rows = _parse_input(raw_text)
 
     if not rows:
-        st.warning("No trades found — make sure each line has at least 5 fields.")
+        st.warning("No trades found - make sure each line has at least 5 fields.")
         return
 
     valid_rows = [r for r in rows if r["_valid"]]
@@ -384,7 +384,7 @@ def render_mass_trade_page():
 
     st.divider()
     st.subheader(
-        f"Preview — {len(rows)} trades ({len(valid_rows)} valid, {len(invalid_rows)} invalid)",
+        f"Preview - {len(rows)} trades ({len(valid_rows)} valid, {len(invalid_rows)} invalid)",
         anchor=False
     )
 
@@ -403,7 +403,7 @@ def render_mass_trade_page():
     st.divider()
 
     # Submission lives in its own form too, entirely separate from the
-    # paste form above — it can only ever fire from an explicit click on
+    # paste form above - it can only ever fire from an explicit click on
     # its own submit button, never as a side effect of the paste form.
     # Wrapped in a keyed container so the CSS below only recolors this
     # specific button, not "Preview Trades" or "Book More Trades" (which

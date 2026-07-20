@@ -27,7 +27,7 @@ def get_account_options():
     if result["status"] == "success":
         accounts = result["data"].get("accounts", [])
     label_to_id = {
-        f"{acct.get('account_name') or '(unnamed account)'} — {acct['account_id']}": acct['account_id']
+        f"{acct.get('account_name') or '(unnamed account)'} - {acct['account_id']}": acct['account_id']
         for acct in accounts
     }
     labels = list(label_to_id.keys())
@@ -56,7 +56,7 @@ def get_account_name(account_id):
     if not account_id:
         return account_id
     _, label_to_id = get_account_options()
-    id_to_name = {aid: lbl.split(" — ")[0] for lbl, aid in label_to_id.items()}
+    id_to_name = {aid: lbl.split(" - ")[0] for lbl, aid in label_to_id.items()}
     return id_to_name.get(account_id, account_id)
 
 
@@ -75,7 +75,7 @@ def get_account_can_short(account_id):
 
 
 def account_select(label="Account", preselect_account_id=None, key=None):
-    """Renders a dropdown of the user's accounts (shown as 'Name — id'),
+    """Renders a dropdown of the user's accounts (shown as 'Name - id'),
     starting on a non-selectable 'Select Account' placeholder unless an
     account should be preselected (e.g. jumping here from My Accounts).
     Returns the selected account_id, or None if nothing real is chosen
