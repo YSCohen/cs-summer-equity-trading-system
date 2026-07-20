@@ -175,15 +175,18 @@ async def get_all_accounts_positions(account_id: str, user_id: str):
 
 
 async def get_all_users_ticker_positions(ticker: str, user_id: str):
-    # Get User data
-    raw_user = await redis_client.hget(USERS_KEY, user_id)
+    # Get User and ticker data in one round trip
+    pipe = redis_client.pipeline()
+    pipe.hget(USERS_KEY, user_id)
+    pipe.hget(MARKET_PRICES_KEY, ticker)
+    raw_user, raw_symbol_data = await pipe.execute()
+
     if raw_user is None:
         raise HTTPException(
             status_code=503, detail="The database has crashed, try again later"
         )
     user_data = json.loads(raw_user)
 
-    raw_symbol_data = await redis_client.hget(MARKET_PRICES_KEY, ticker)
     if raw_symbol_data is None:
         raise HTTPException(status_code=422, detail="Ticker does not exist")
     real_symbol_data = json.loads(raw_symbol_data)
@@ -243,8 +246,13 @@ async def get_all_users_ticker_positions(ticker: str, user_id: str):
 
 
 async def get_account_ticker_position(ticker: str, account_id: str, user_id: str):
-    # Grab User data
-    raw_user = await redis_client.hget(USERS_KEY, user_id)
+    # Grab User, ticker, and account data in one round trip
+    pipe = redis_client.pipeline()
+    pipe.hget(USERS_KEY, user_id)
+    pipe.hget(MARKET_PRICES_KEY, ticker)
+    pipe.hget(ACCOUNTS_KEY, account_id)
+    raw_user, raw_symbol_data, raw_account = await pipe.execute()
+
     if raw_user is None:
         raise HTTPException(
             status_code=503, detail="The database has crashed, try again later"
@@ -257,12 +265,10 @@ async def get_account_ticker_position(ticker: str, account_id: str, user_id: str
             status_code=401, detail="You do not have access to this account"
         )
 
-    raw_symbol_data = await redis_client.hget(MARKET_PRICES_KEY, ticker)
     if raw_symbol_data is None:
         raise HTTPException(status_code=422, detail="Ticker does not exist")
     real_symbol_data = json.loads(raw_symbol_data)
 
-    raw_account = await redis_client.hget(ACCOUNTS_KEY, account_id)
     account_data = json.loads(raw_account)
 
     positions = {}

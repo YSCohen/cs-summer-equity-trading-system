@@ -27,9 +27,11 @@ async def register_valid_user(username: str, password: str):
         "created_at": now,
         "updated_at": now,
     }
-    # send new User to redis
-    await redis_client.hset(USERS_KEY, user_id, json.dumps(user_data))
-    await redis_client.hset(USERNAMES_KEY, username, user_id)
+    # send new User to redis (both writes atomically so neither can land alone)
+    pipe = redis_client.pipeline(transaction=True)
+    pipe.hset(USERS_KEY, user_id, json.dumps(user_data))
+    pipe.hset(USERNAMES_KEY, username, user_id)
+    await pipe.execute()
 
     return user_id
 

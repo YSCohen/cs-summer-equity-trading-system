@@ -13,11 +13,23 @@ from app.services import ticker_service
 async def individual_trade(user_id: str, trade: dict):
     logger.info("Booking a trade")
     start = time.perf_counter()
-    user_data = await get_user_data(user_id)  # Fetch user data from Redis
-    # Ensure it's a valid account
-    account_data = await get_account_data(
-        trade["account_id"]
-    )  # Fetch account data from Redis
+    # Fetch user and account data in one round trip
+    pipe = redis_client.pipeline()
+    pipe.hget(USERS_KEY, user_id)
+    pipe.hget(ACCOUNTS_KEY, trade["account_id"])
+    raw_user, raw_account = await pipe.execute()
+
+    if raw_user is None:
+        raise HTTPException(
+            status_code=503, detail="The database has crashed, try again later"
+        )
+    user_data = json.loads(raw_user)
+
+    if raw_account is None:
+        raise HTTPException(
+            status_code=404, detail=f"Account number {trade['account_id']} does not exist"
+        )
+    account_data = json.loads(raw_account)
 
     await verify_trade_details(trade, user_data)
 
@@ -69,6 +81,7 @@ async def individual_trade(user_id: str, trade: dict):
                 real_position_data["symbol_ticker"] == trade["ticker"]
             ):  # Correct account and ticker
                 position_key = position_uuid
+                specific_position = real_position_data
                 if (
                     trade["direction"] == "Sell"
                     and real_position_data["quantity"] - trade["quantity"] < 0
@@ -128,12 +141,7 @@ async def individual_trade(user_id: str, trade: dict):
             await pipe.execute()
             logger.info("Created new position for account")
         else:  # Editing existing position
-            # Grab the existing positions data
-            raw_specific_position = await redis_client.hget(
-                POSITIONS_KEY, position_key
-            )
-            specific_position = json.loads(raw_specific_position)
-
+            # Reuse the position already read above instead of re-fetching it
             # Edit the existing position data
             new_average_cost, realized_pnl = calculate_p_and_l_changes(
                 trade, specific_position, new_position
