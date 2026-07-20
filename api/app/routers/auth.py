@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Response, Request
+from fastapi import APIRouter, Response, Request, Depends
 from app.core.logging import logger
-from app.core.security import create_cookie
+from app.core.security import create_cookie, verify_cookie
 from app.core.config import DAY_IN_SEC
 from app.models.auth_models import RegisterRequest, LoginRequest
 from app.services.auth_services import (
@@ -63,3 +63,8 @@ async def logout(response: Response, request: Request):
     response.delete_cookie(key="session", httponly=True, samesite="lax")
 
     return {"message": "logged out"}
+
+
+@router.get("/me")
+async def get_current_user(user_id: str = Depends(verify_cookie)):
+    return {"user_id": user_id, "status": "success"}

@@ -9,3 +9,4 @@ resources:
   - keda.yaml
   - service.yaml
   - ingress.yaml
+  - jwt-secret-job.yaml

@@ -82,6 +82,10 @@ spec:
 
     prometheus:
       enabled: true
+      prometheus-node-exporter:
+        hostRootFsMount:
+          enabled: true
+          mountPropagation: HostToContainer
 
     promtail:
       enabled: true

@@ -1,4 +1,4 @@
-.PHONY: up down toolbox-up toolbox-down cluster-up cluster-down rebuild
+.PHONY: up down toolbox-up toolbox-down cluster-up cluster-up-sean cluster-up-max cluster-up-yehuda cluster-up-will cluster-down rebuild
 
 # ==========================================
 # 🏗️ TOOLBOX & CLUSTER LIFECYCLE
