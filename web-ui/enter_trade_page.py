@@ -30,7 +30,7 @@ def _trade_row(trade, key_prefix, index):
     Returns True if the row triggered a rerun-worthy action."""
     with st.container(border=True):
         cols = st.columns([3, 2, 2, 2, 1, 1])
-        cols[0].write(f"**{trade['ticker']}**  —  {trade['account_id']}")
+        cols[0].write(f"**{trade['ticker']}**  -  {trade['account_id']}")
         cols[1].write(trade["direction"])
         cols[2].write(f"Qty: {trade['quantity']}")
         cols[3].write(f"${trade['price']}")

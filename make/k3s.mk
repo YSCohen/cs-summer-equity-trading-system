@@ -1,6 +1,6 @@
 # This file is downloaded standalone to ~/Makefile on remote K3s nodes
 # (via k3s_manager.sh "Setup Make Toolbox"), where there is no k8s-toolbox
-# container — so it calls kubectl/flux directly and intentionally duplicates
+# container - so it calls kubectl/flux directly and intentionally duplicates
 # targets from the other make/*.mk files.
 
 .PHONY: all help status events ks sync logs db-backup db-restore db-clear bounce st-status st-restart st-scale

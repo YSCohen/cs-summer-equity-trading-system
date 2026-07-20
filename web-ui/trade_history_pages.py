@@ -15,12 +15,12 @@ from account_picker import account_select, get_account_name
 
 
 def _trade_card(trade):
-    ticker = trade.get("symbol_ticker") or trade.get("ticker", "—")
+    ticker = trade.get("symbol_ticker") or trade.get("ticker", "-")
     with st.container(border=True):
         cols = st.columns([3, 2, 2])
-        cols[0].write(f"**{trade.get('direction', '—')} {ticker}**")
-        cols[1].write(f"Qty: {trade.get('quantity', '—')}")
-        cols[2].write(f"${trade.get('price', '—')}")
+        cols[0].write(f"**{trade.get('direction', '-')} {ticker}**")
+        cols[1].write(f"Qty: {trade.get('quantity', '-')}")
+        cols[2].write(f"${trade.get('price', '-')}")
 
         cols2 = st.columns([2, 3])
         cols2[0].caption(f"Account: {get_account_name(trade.get('account_id'))}")

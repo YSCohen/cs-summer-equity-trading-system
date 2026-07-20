@@ -71,7 +71,7 @@ def render_create_account_page():
     created_id = st.session_state.get("_created_account_id")
     created_name = st.session_state.get("_created_account_name")
     if created_id:
-        st.success(f"Account **{created_name}** created — ID: `{created_id}`")
+        st.success(f"Account **{created_name}** created - ID: `{created_id}`")
         col1, col2, _ = st.columns([1, 1, 3])
         if col1.button("💸 Enter a Trade", type="primary"):
             st.session_state.jump_to_trade_account = created_id

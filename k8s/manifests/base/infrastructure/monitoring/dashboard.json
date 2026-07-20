@@ -618,7 +618,7 @@
     {
       "id": 600,
       "type": "row",
-      "title": "Cluster Health — Node Counts",
+      "title": "Cluster Health - Node Counts",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 600 },
       "panels": []

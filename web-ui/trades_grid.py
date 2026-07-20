@@ -4,16 +4,16 @@ from account_picker import get_account_name
 
 def _trade_row(trade):
     """Builds one flat row dict from a single position dict."""
-    ticker = trade.get("symbol_ticker") or trade.get("ticker", "—")
+    ticker = trade.get("symbol_ticker") or trade.get("ticker", "-")
 
     return {
         "Booked At": trade.get("created_at"),
         "Ticker": ticker,
-        "Direction": trade.get("direction", "—"),
-        "Quantity": trade.get("quantity", "—"),
-        "Price": trade.get("price", "—"),
+        "Direction": trade.get("direction", "-"),
+        "Quantity": trade.get("quantity", "-"),
+        "Price": trade.get("price", "-"),
         "Account": get_account_name(trade.get("account_id")),
-        "Trade ID": trade.get("trade_id", "—"),
+        "Trade ID": trade.get("trade_id", "-"),
     }
 
 def flatten_trades(data):

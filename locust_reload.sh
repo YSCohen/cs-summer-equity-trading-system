@@ -31,4 +31,4 @@ $ENGINE exec -i k8s-toolbox sh -c 'kubectl create configmap locust-config -n loa
 echo "♻️ Restarting Locust pods to apply changes..."
 $ENGINE exec -i k8s-toolbox kubectl rollout restart deployment/locust-load-tester -n load-testing
 
-echo "✅ Restart triggered — pods will pick up the new configuration shortly."
+echo "✅ Restart triggered - pods will pick up the new configuration shortly."
